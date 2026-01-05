@@ -40,11 +40,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/zenstack-trpc"
+    "url": "https://github.com/olup/zenstack-trpc"
   },
-  "homepage": "https://github.com/your-username/zenstack-trpc#readme",
+  "homepage": "https://github.com/olup/zenstack-trpc#readme",
   "bugs": {
-    "url": "https://github.com/your-username/zenstack-trpc/issues"
+    "url": "https://github.com/olup/zenstack-trpc/issues"
   },
   "engines": {
     "node": ">=18"
