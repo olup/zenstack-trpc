@@ -57,22 +57,18 @@ npx zenstack generate
 ### 3. Create the tRPC router
 
 ```typescript
+import { initTRPC } from "@trpc/server";
 import { ZenStackClient } from "@zenstackhq/orm";
 import { schema, SchemaType } from "./zenstack/schema.js";
-import {
-  createTRPC,
-  createZenStackRouter,
-  type Context,
-  type TypedRouterCaller,
-} from "zenstack-trpc";
+import { createZenStackRouter, type TypedRouterCaller } from "zenstack-trpc";
 
 // Create your database client
 const db = new ZenStackClient(schema, {
   dialect: yourDialect, // Kysely dialect (SQLite, PostgreSQL, MySQL, etc.)
 });
 
-// Create tRPC instance
-const t = createTRPC<Context>();
+// Create your tRPC instance with your context
+const t = initTRPC.context<{ db: typeof db }>().create();
 
 // Generate the router from your schema
 const appRouter = createZenStackRouter(schema, t);
@@ -120,23 +116,15 @@ await caller.user.update({
 
 ## API Reference
 
-### `createTRPC<Context>()`
-
-Creates a tRPC instance with the given context type.
-
-```typescript
-import { createTRPC, type Context } from "zenstack-trpc";
-
-const t = createTRPC<Context>();
-```
-
 ### `createZenStackRouter(schema, t)`
 
 Generates a tRPC router from a ZenStack schema.
 
 ```typescript
+import { initTRPC } from "@trpc/server";
 import { createZenStackRouter } from "zenstack-trpc";
 
+const t = initTRPC.context<{ db: any }>().create();
 const appRouter = createZenStackRouter(schema, t);
 ```
 
@@ -241,12 +229,12 @@ app.use(
 Extend the context with authentication or other data:
 
 ```typescript
-interface MyContext extends Context {
+interface MyContext {
   db: any;
   userId?: string;
 }
 
-const t = createTRPC<MyContext>();
+const t = initTRPC.context<MyContext>().create();
 const appRouter = createZenStackRouter(schema, t);
 
 // In your adapter

@@ -5,20 +5,19 @@
  *
  * @example
  * ```typescript
+ * import { initTRPC } from "@trpc/server";
  * import { ZenStackClient } from "@zenstackhq/orm";
  * import { schema, SchemaType } from "./zenstack/schema.js";
- * import {
- *   createTRPC,
- *   createZenStackRouter,
- *   type Context,
- *   type TypedRouterCaller,
- * } from "zenstack-trpc";
+ * import { createZenStackRouter, type TypedRouterCaller } from "zenstack-trpc";
  *
- * const db = new ZenStackClient(schema, { dialect: yourDialect });
- * const t = createTRPC<Context>();
+ * // Create your tRPC instance with your context
+ * const t = initTRPC.context<{ db: any }>().create();
+ *
+ * // Generate the router
  * const appRouter = createZenStackRouter(schema, t);
  *
  * // Create a typed caller with full type inference
+ * const db = new ZenStackClient(schema, { dialect: yourDialect });
  * const caller = appRouter.createCaller({ db }) as TypedRouterCaller<SchemaType>;
  *
  * // All operations are fully typed!
@@ -30,9 +29,7 @@
 
 // Router generator and types
 export {
-  createTRPC,
   createZenStackRouter,
-  type Context,
   type ZenStackRouter,
   type TypedRouterCaller,
   type TypedModelProcedures,

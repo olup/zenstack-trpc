@@ -1,9 +1,8 @@
 import { describe, it, expectTypeOf } from "vitest";
+import { initTRPC } from "@trpc/server";
 import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import {
-  createTRPC,
   createZenStackRouter,
-  type Context,
   type TypedRouterCaller,
   type TypedModelProcedures,
 } from "../src/index.js";
@@ -266,22 +265,16 @@ describe("Type Tests", () => {
     });
   });
 
-  describe("Context type", () => {
-    it("Context should have db property", () => {
-      expectTypeOf<Context>().toHaveProperty("db");
-    });
-  });
-
   describe("Router creation types", () => {
-    it("createTRPC should return a tRPC instance", () => {
-      const t = createTRPC<Context>();
+    it("initTRPC should return a tRPC instance", () => {
+      const t = initTRPC.context<{ db: any }>().create();
 
       expectTypeOf(t).toHaveProperty("router");
       expectTypeOf(t).toHaveProperty("procedure");
     });
 
     it("createZenStackRouter should return a router", () => {
-      const t = createTRPC<Context>();
+      const t = initTRPC.context<{ db: any }>().create();
       const router = createZenStackRouter(schema, t);
 
       expectTypeOf(router).toHaveProperty("createCaller");

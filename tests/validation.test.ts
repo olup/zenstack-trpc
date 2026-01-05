@@ -1,28 +1,24 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { initTRPC, TRPCError } from "@trpc/server";
 import { schema } from "./fixtures/zenstack/schema.js";
-import {
-  createTRPC,
-  createZenStackRouter,
-  type Context,
-} from "../src/index.js";
+import { createZenStackRouter } from "../src/index.js";
 import {
   createWhereSchema,
   createCreateDataSchema,
   createModelSchemas,
 } from "../src/zod-schemas.js";
 import { createTestDb, setupTestDb, removeTestDb } from "./setup.js";
-import { TRPCError } from "@trpc/server";
 
 describe("Validation Tests", () => {
   let db: ReturnType<typeof createTestDb>;
-  let t: ReturnType<typeof createTRPC<Context>>;
+  let t: ReturnType<typeof initTRPC.context<{ db: any }>["create"]>;
   let appRouter: ReturnType<typeof createZenStackRouter>;
   let caller: ReturnType<typeof appRouter.createCaller>;
 
   beforeAll(async () => {
     db = createTestDb();
     await setupTestDb(db);
-    t = createTRPC<Context>();
+    t = initTRPC.context<{ db: any }>().create();
     appRouter = createZenStackRouter(schema, t);
     caller = appRouter.createCaller({ db });
   });

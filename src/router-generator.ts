@@ -1,4 +1,4 @@
-import { initTRPC, TRPCError } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
 import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
 import type {
   FindManyArgs,
@@ -18,30 +18,6 @@ import type {
 } from "@zenstackhq/orm";
 import { z } from "zod";
 import { createModelSchemas } from "./zod-schemas.js";
-
-/**
- * Context type for the tRPC router
- * The db property accepts any ZenStack client instance
- */
-export interface Context {
-  db: any;
-}
-
-// Internal type for initTRPC result
-const _initTRPCResult = initTRPC.context<Context>().create();
-
-/**
- * Type representing the result of initTRPC.context().create()
- */
-export type TRPCInstance = typeof _initTRPCResult;
-
-/**
- * Creates a tRPC instance with the given context
- * @returns A tRPC instance configured with your context type
- */
-export function createTRPC<TContext extends Context>(): TRPCInstance {
-  return initTRPC.context<TContext>().create() as unknown as TRPCInstance;
-}
 
 /**
  * Type helper to convert model names to lowercase
@@ -174,6 +150,19 @@ export type TypedRouterCaller<Schema extends SchemaDef> = {
 };
 
 /**
+ * Minimal tRPC instance interface required by createZenStackRouter
+ */
+export interface TRPCInstance {
+  procedure: {
+    input: (schema: z.ZodType) => {
+      query: (handler: (opts: { ctx: any; input: any }) => Promise<any>) => any;
+      mutation: (handler: (opts: { ctx: any; input: any }) => Promise<any>) => any;
+    };
+  };
+  router: (procedures: Record<string, any>) => any;
+}
+
+/**
  * Creates procedures for a single model
  */
 function createModelProcedures<Schema extends SchemaDef>(
@@ -234,10 +223,14 @@ function createModelProcedures<Schema extends SchemaDef>(
  *
  * @example
  * ```ts
- * import { createZenStackRouter, createTRPC, Context, TypedRouterCaller } from './trpc';
- * import { schema, SchemaType } from '../zenstack/schema';
+ * import { createZenStackRouter, TypedRouterCaller } from 'zenstack-trpc';
+ * import { initTRPC } from '@trpc/server';
+ * import { schema, SchemaType } from './zenstack/schema';
  *
- * const t = createTRPC<Context>();
+ * // Create your own tRPC instance with your context
+ * const t = initTRPC.context<{ db: any }>().create();
+ *
+ * // Generate the router
  * const appRouter = createZenStackRouter(schema, t);
  *
  * // Create a typed caller with FULL type inference
@@ -246,9 +239,6 @@ function createModelProcedures<Schema extends SchemaDef>(
  * // Types are fully inferred based on your query!
  * const users = await caller.user.findMany();
  * // ^? { id: string, email: string, name: string | null, ... }[]
- *
- * const usersWithPosts = await caller.user.findMany({ include: { posts: true } });
- * // ^? { id: string, email: string, ..., posts: Post[] }[]
  *
  * export type AppRouter = typeof appRouter;
  * ```
