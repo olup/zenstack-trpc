@@ -9,16 +9,12 @@ Auto-generate fully type-safe tRPC routers from [ZenStack V3](https://zenstack.d
 - **Dynamic result typing** - `include`/`select` options reflected in return types
 - **Zod validation** - Runtime input validation built-in
 - **All CRUD operations** - findMany, findUnique, create, update, delete, and more
-- **Standard tRPC** - Works with all tRPC adapters (HTTP, WebSocket, Next.js, etc.)
+- **Standard tRPC** - Works with all tRPC adapters and clients
 
 ## Installation
 
 ```bash
 npm install zenstack-trpc @trpc/server @zenstackhq/orm zod
-# or
-pnpm add zenstack-trpc @trpc/server @zenstackhq/orm zod
-# or
-yarn add zenstack-trpc @trpc/server @zenstackhq/orm zod
 ```
 
 ## Quick Start
@@ -57,62 +53,69 @@ npx zenstack generate
 ### 3. Create the tRPC router
 
 ```typescript
+// server/trpc.ts
 import { initTRPC } from "@trpc/server";
 import { ZenStackClient } from "@zenstackhq/orm";
-import { schema, SchemaType } from "./zenstack/schema.js";
-import { createZenStackRouter, type TypedRouterCaller } from "zenstack-trpc";
+import { schema } from "./zenstack/schema.js";
+import { createZenStackRouter } from "zenstack-trpc";
 
 // Create your database client
 const db = new ZenStackClient(schema, {
   dialect: yourDialect, // Kysely dialect (SQLite, PostgreSQL, MySQL, etc.)
 });
 
-// Create your tRPC instance with your context
+// Create your tRPC instance
 const t = initTRPC.context<{ db: typeof db }>().create();
 
-// Generate the router from your schema
-const appRouter = createZenStackRouter(schema, t);
-
-// Export for client usage
+// Generate the router
+export const appRouter = createZenStackRouter(schema, t);
 export type AppRouter = typeof appRouter;
 ```
 
-### 4. Use the router
+### 4. Use with tRPC client
 
 ```typescript
-// Create a typed caller
-const caller = appRouter.createCaller({ db }) as TypedRouterCaller<SchemaType>;
+// client.ts
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import type { AppRouter } from "./server/trpc.js";
+
+const client = createTRPCClient<AppRouter>({
+  links: [httpBatchLink({ url: "http://localhost:3000/trpc" })],
+});
 
 // All operations are fully typed!
-const users = await caller.user.findMany();
-//    ^? { id: string, email: string, name: string | null, ... }[]
+const users = await client.user.findMany.query();
 
-// Include relations - return type automatically includes them
-const usersWithPosts = await caller.user.findMany({
-  include: { posts: true }
-});
-//    ^? { id: string, ..., posts: Post[] }[]
-
-// Select specific fields
-const emails = await caller.user.findMany({
-  select: { id: true, email: true }
-});
-//    ^? { id: string, email: string }[]
-
-// Create with full validation
-const user = await caller.user.create({
-  data: {
-    email: "alice@example.com",
-    name: "Alice",
-  },
+// Include relations
+const usersWithPosts = await client.user.findMany.query({
+  include: { posts: true },
 });
 
-// Update with type-safe where clause
-await caller.user.update({
+// Create with validation
+const user = await client.user.create.mutate({
+  data: { email: "alice@example.com", name: "Alice" },
+});
+
+// Update
+await client.user.update.mutate({
   where: { id: user.id },
   data: { name: "Alice Smith" },
 });
 ```
+
+## Generated Router Structure
+
+For each model in your schema, the following procedures are generated:
+
+| Queries | Mutations |
+|---------|-----------|
+| findMany | create |
+| findUnique | createMany |
+| findFirst | update |
+| count | updateMany |
+| aggregate | upsert |
+| groupBy | delete |
+| | deleteMany |
 
 ## API Reference
 
@@ -130,7 +133,7 @@ const appRouter = createZenStackRouter(schema, t);
 
 ### `TypedRouterCaller<SchemaType>`
 
-Type helper for fully typed caller with dynamic input/output inference.
+Type helper for server-side caller with full type inference.
 
 ```typescript
 import type { TypedRouterCaller } from "zenstack-trpc";
@@ -139,130 +142,19 @@ import type { SchemaType } from "./zenstack/schema.js";
 const caller = appRouter.createCaller({ db }) as TypedRouterCaller<SchemaType>;
 ```
 
-### `TypedModelProcedures<Schema, Model>`
-
-Type helper for a single model's procedures.
-
-```typescript
-import type { TypedModelProcedures } from "zenstack-trpc";
-
-type UserProcedures = TypedModelProcedures<SchemaType, "User">;
-```
-
-## Generated Router Structure
-
-For each model in your schema, the following procedures are generated:
-
-```
-router
-├── user
-│   ├── findMany    (query)
-│   ├── findUnique  (query)
-│   ├── findFirst   (query)
-│   ├── create      (mutation)
-│   ├── createMany  (mutation)
-│   ├── update      (mutation)
-│   ├── updateMany  (mutation)
-│   ├── upsert      (mutation)
-│   ├── delete      (mutation)
-│   ├── deleteMany  (mutation)
-│   ├── count       (query)
-│   ├── aggregate   (query)
-│   └── groupBy     (query)
-├── post
-│   └── ... (same operations)
-```
-
-## Using with tRPC Adapters
-
-### Standalone HTTP Server
-
-```typescript
-import { createHTTPServer } from "@trpc/server/adapters/standalone";
-
-const server = createHTTPServer({
-  router: appRouter,
-  createContext: () => ({ db }),
-});
-
-server.listen(3000);
-```
-
-### Next.js App Router
-
-```typescript
-// app/api/trpc/[trpc]/route.ts
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-
-const handler = (req: Request) =>
-  fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req,
-    router: appRouter,
-    createContext: () => ({ db }),
-  });
-
-export { handler as GET, handler as POST };
-```
-
-### Express
-
-```typescript
-import express from "express";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-
-const app = express();
-
-app.use(
-  "/trpc",
-  createExpressMiddleware({
-    router: appRouter,
-    createContext: () => ({ db }),
-  })
-);
-```
-
-## Advanced Usage
-
-### Custom Context
-
-Extend the context with authentication or other data:
-
-```typescript
-interface MyContext {
-  db: any;
-  userId?: string;
-}
-
-const t = initTRPC.context<MyContext>().create();
-const appRouter = createZenStackRouter(schema, t);
-
-// In your adapter
-createContext: (opts) => ({
-  db: getEnhancedDb(opts.req), // ZenStack enhanced client with access control
-  userId: getUserFromRequest(opts.req),
-});
-```
-
 ### Zod Schema Access
 
 Access the generated Zod schemas for custom validation:
 
 ```typescript
-import {
-  createModelSchemas,
-  createWhereSchema,
-  createCreateDataSchema,
-} from "zenstack-trpc";
+import { createModelSchemas, createWhereSchema } from "zenstack-trpc";
 
 const userSchemas = createModelSchemas(schema, "User");
-const whereSchema = createWhereSchema(schema, "User");
 ```
 
 ## Requirements
 
 - Node.js >= 18
-- TypeScript >= 5.0
 - ZenStack V3 (`@zenstackhq/orm` >= 3.0.0)
 - tRPC >= 11.0.0
 - Zod >= 3.0.0
