@@ -1,0 +1,36 @@
+# Source files (dist is published instead)
+src/
+tests/
+
+# Development files
+*.test.ts
+vitest.config.ts
+tsconfig.json
+tsconfig.build.json
+*.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Package manager
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Misc
+.env*
+*.log
+coverage/
+.claude/
