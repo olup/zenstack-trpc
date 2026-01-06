@@ -273,7 +273,7 @@ type TypedQueryProcedure<TInput, TOutput> = {
     type: 'query';
     meta: unknown;
     experimental_caller: boolean;
-    inputs: unknown[];
+    inputs: any[];
   };
   meta: unknown;
   (opts: unknown): Promise<TOutput>;
@@ -293,7 +293,7 @@ type TypedMutationProcedure<TInput, TOutput> = {
     type: 'mutation';
     meta: unknown;
     experimental_caller: boolean;
-    inputs: unknown[];
+    inputs: any[];
   };
   meta: unknown;
   (opts: unknown): Promise<TOutput>;
@@ -305,8 +305,7 @@ type TypedMutationProcedure<TInput, TOutput> = {
  */
 export type TRPCModelProcedures<
   Schema extends SchemaDef,
-  Model extends GetModels<Schema>,
-  TContext
+  Model extends GetModels<Schema>
 > = {
   findMany: TypedQueryProcedure<
     FindManyArgs<Schema, Model> | undefined,
@@ -365,8 +364,8 @@ export type TRPCModelProcedures<
 /**
  * Type for the full router record that tRPC uses for inference
  */
-export type ZenStackRouterRecord<Schema extends SchemaDef, TContext> = {
-  [K in GetModels<Schema> as Uncapitalize<K>]: TRPCModelProcedures<Schema, K, TContext>;
+export type ZenStackRouterRecord<Schema extends SchemaDef> = {
+  [K in GetModels<Schema> as Uncapitalize<K>]: TRPCModelProcedures<Schema, K>;
 };
 
 /**
@@ -381,8 +380,16 @@ export type ZenStackRouter<Schema extends SchemaDef, TContext = any> = {
         errorShape: any;
         transformer: false;
       };
+      transformer: any;
+      errorFormatter: any;
+      allowOutsideOfServer: boolean;
+      isServer: boolean;
+      isDev: boolean;
     };
-    record: ZenStackRouterRecord<Schema, TContext>;
+    record: ZenStackRouterRecord<Schema>;
+    router: true;
+    procedures: ZenStackRouterRecord<Schema>;
+    lazy: {};
   };
   createCaller: (ctx: TContext) => TypedRouterCaller<Schema>;
-};
+} & ZenStackRouterRecord<Schema>;

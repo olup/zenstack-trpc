@@ -38,6 +38,22 @@ export {
   type TRPCInstance,
 } from "./router-generator.js";
 
+// Typed client helpers for full include/select inference
+export {
+  // Converter utilities
+  withZenStackTypes,
+  withNestedZenStackReact,
+  withNestedZenStackClient,
+  // Type helper for nested namespaces
+  type WithZenStackTypes,
+  // Vanilla tRPC client types
+  type TypedTRPCClient,
+  type TypedClientModelProcedures,
+  // React Query / tRPC React hook types
+  type TypedTRPCReact,
+  type TypedReactModelHooks,
+} from "./typed-client.js";
+
 // Zod schema generators (for advanced usage)
 export {
   createModelSchemas,

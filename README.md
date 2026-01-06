@@ -133,13 +133,102 @@ const appRouter = createZenStackRouter(schema, t);
 
 ### `TypedRouterCaller<SchemaType>`
 
-Type helper for server-side caller with full type inference.
+Type helper for server-side caller with full type inference, including dynamic `include`/`select` result typing.
 
 ```typescript
 import type { TypedRouterCaller } from "zenstack-trpc";
 import type { SchemaType } from "./zenstack/schema.js";
 
 const caller = appRouter.createCaller({ db }) as TypedRouterCaller<SchemaType>;
+
+// Return type dynamically includes the posts relation!
+const usersWithPosts = await caller.user.findMany({ include: { posts: true } });
+// Type: (User & { posts: Post[] })[]
+```
+
+### `withZenStackTypes<SchemaType>()`
+
+Utility function that adds full `include`/`select` type inference to any tRPC client. This solves tRPC's limitation where generic type information is lost during type inference.
+
+Works with both vanilla tRPC clients and React hooks:
+
+```typescript
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import { createTRPCReact } from "@trpc/react-query";
+import { withZenStackTypes } from "zenstack-trpc";
+import type { AppRouter } from "./server/trpc.js";
+import type { SchemaType } from "./zenstack/schema.js";
+
+// For vanilla tRPC client:
+const client = withZenStackTypes<SchemaType>()(
+  createTRPCClient<AppRouter>({
+    links: [httpBatchLink({ url: "http://localhost:3000/trpc" })],
+  })
+);
+
+// Now includes are fully typed!
+const usersWithPosts = await client.user.findMany.query({
+  include: { posts: true }
+});
+// Type: (User & { posts: Post[] })[]
+
+// For tRPC React hooks:
+const trpc = withZenStackTypes<SchemaType>()(
+  createTRPCReact<AppRouter>()
+);
+
+// In your component:
+const { data } = trpc.user.findMany.useQuery({
+  include: { posts: true }
+});
+// data is typed as (User & { posts: Post[] })[] | undefined
+```
+
+You can also use the type helpers directly if you prefer manual casting:
+
+```typescript
+import type { TypedTRPCClient, TypedTRPCReact } from "zenstack-trpc";
+
+const client = _client as unknown as TypedTRPCClient<SchemaType>;
+const trpc = _trpc as unknown as TypedTRPCReact<SchemaType>;
+```
+
+### Nested Namespaces (Merged Routers)
+
+When your ZenStack router is merged under a namespace in your main router, use `WithZenStackTypes` or `withNestedZenStackTypes()`:
+
+```typescript
+// If your router structure is:
+// appRouter = t.router({
+//   db: zenStackRouter,  // ZenStack models under 'db' namespace
+//   auth: authRouter,
+// })
+
+import { createTRPCReact } from "@trpc/react-query";
+import type { AppRouter } from "./server/trpc.js";
+import type { SchemaType } from "./zenstack/schema.js";
+import type { WithZenStackTypes } from "zenstack-trpc";
+
+const _trpc = createTRPCReact<AppRouter>();
+
+// Option 1: Type helper for manual casting
+type TypedTRPC = Omit<typeof _trpc, 'db'> & {
+  db: WithZenStackTypes<SchemaType, 'react'>
+};
+export const trpc = _trpc as unknown as TypedTRPC;
+
+// Option 2: Use the helper functions
+import { withNestedZenStackReact, withNestedZenStackClient } from "zenstack-trpc";
+
+// For React hooks:
+export const trpc = withNestedZenStackReact<SchemaType, typeof _trpc, 'db'>('db')(_trpc);
+
+// For vanilla tRPC client:
+// export const client = withNestedZenStackClient<SchemaType, typeof _client, 'db'>('db')(_client);
+
+// Now you can use:
+// trpc.db.user.findMany.useQuery({ include: { posts: true } }) // fully typed
+// trpc.auth.login.useMutation() // other routers unaffected
 ```
 
 ### Zod Schema Access

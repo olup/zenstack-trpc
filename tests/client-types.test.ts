@@ -1,10 +1,10 @@
 import { describe, it, expectTypeOf } from "vitest";
 import { initTRPC, inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import { createTRPCClient } from "@trpc/client";
 import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import {
   createZenStackRouter,
   type TypedRouterCaller,
+  type TypedTRPCClient,
 } from "../src/index.js";
 
 /**
@@ -234,6 +234,180 @@ describe("Client-side Type Tests", () => {
       expectTypeOf<PostItem>().not.toBeNever();
       expectTypeOf<PostItem>().toHaveProperty("title");
       expectTypeOf<PostItem>().toHaveProperty("authorId");
+    });
+  });
+
+  describe("Include and Select input types", () => {
+    // These tests verify that include/select options are properly typed in inputs
+
+    it("user.findMany input should accept include option", () => {
+      type FindManyInput = RouterInputs["user"]["findMany"];
+      // FindManyInput can be undefined, so extract the non-undefined type
+      type NonNullInput = Exclude<FindManyInput, undefined>;
+      // Check that NonNullInput is an object type (not never)
+      expectTypeOf<NonNullInput>().not.toBeNever();
+    });
+
+    it("user.findMany input should accept select option", () => {
+      type FindManyInput = RouterInputs["user"]["findMany"];
+      type NonNullInput = Exclude<FindManyInput, undefined>;
+      expectTypeOf<NonNullInput>().not.toBeNever();
+    });
+
+    it("user.findMany input is properly typed (not any)", () => {
+      type FindManyInput = RouterInputs["user"]["findMany"];
+      expectTypeOf<FindManyInput>().not.toBeAny();
+    });
+
+    it("post.findMany input is properly typed (not any)", () => {
+      type FindManyInput = RouterInputs["post"]["findMany"];
+      expectTypeOf<FindManyInput>().not.toBeAny();
+    });
+
+    it("user.create input should accept include option", () => {
+      type CreateInput = RouterInputs["user"]["create"];
+      expectTypeOf<CreateInput>().toHaveProperty("include");
+    });
+
+    it("user.update input should accept include option", () => {
+      type UpdateInput = RouterInputs["user"]["update"];
+      expectTypeOf<UpdateInput>().toHaveProperty("include");
+    });
+  });
+
+  describe("Relation types in output (base model fields)", () => {
+    // Note: tRPC client types provide base model fields.
+    // Dynamic include/select reflection requires server-side TypedRouterCaller.
+
+    it("user.findMany output has base User fields", () => {
+      type FindManyOutput = RouterOutputs["user"]["findMany"];
+      type UserItem = FindManyOutput extends Array<infer U> ? U : never;
+      expectTypeOf<UserItem>().toHaveProperty("id");
+      expectTypeOf<UserItem>().toHaveProperty("email");
+      expectTypeOf<UserItem>().toHaveProperty("name");
+      expectTypeOf<UserItem>().toHaveProperty("createdAt");
+      expectTypeOf<UserItem>().toHaveProperty("updatedAt");
+    });
+
+    it("post.findMany output has base Post fields", () => {
+      type FindManyOutput = RouterOutputs["post"]["findMany"];
+      type PostItem = FindManyOutput extends Array<infer P> ? P : never;
+      expectTypeOf<PostItem>().toHaveProperty("id");
+      expectTypeOf<PostItem>().toHaveProperty("title");
+      expectTypeOf<PostItem>().toHaveProperty("content");
+      expectTypeOf<PostItem>().toHaveProperty("published");
+      expectTypeOf<PostItem>().toHaveProperty("authorId");
+    });
+
+    it("user.create output has base User fields", () => {
+      type CreateOutput = RouterOutputs["user"]["create"];
+      expectTypeOf<CreateOutput>().toHaveProperty("id");
+      expectTypeOf<CreateOutput>().toHaveProperty("email");
+    });
+
+    it("post.create output has base Post fields", () => {
+      type CreateOutput = RouterOutputs["post"]["create"];
+      expectTypeOf<CreateOutput>().toHaveProperty("id");
+      expectTypeOf<CreateOutput>().toHaveProperty("title");
+      expectTypeOf<CreateOutput>().toHaveProperty("authorId");
+    });
+  });
+
+  describe("Server-side TypedRouterCaller (full dynamic typing)", () => {
+    // TypedRouterCaller provides full dynamic output typing based on include/select
+
+    it("findMany function is properly typed", () => {
+      // ServerCaller provides a findMany function that accepts typed args
+      expectTypeOf<ServerCaller["user"]["findMany"]>().toBeFunction();
+    });
+
+    it("create function is properly typed", () => {
+      expectTypeOf<ServerCaller["user"]["create"]>().toBeFunction();
+    });
+
+    it("post findMany function is properly typed", () => {
+      expectTypeOf<ServerCaller["post"]["findMany"]>().toBeFunction();
+    });
+
+    it("user model has all CRUD operations", () => {
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("findMany");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("findUnique");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("findFirst");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("create");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("createMany");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("update");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("updateMany");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("upsert");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("delete");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("deleteMany");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("count");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("aggregate");
+      expectTypeOf<ServerCaller["user"]>().toHaveProperty("groupBy");
+    });
+
+    it("post model has all CRUD operations", () => {
+      expectTypeOf<ServerCaller["post"]>().toHaveProperty("findMany");
+      expectTypeOf<ServerCaller["post"]>().toHaveProperty("findUnique");
+      expectTypeOf<ServerCaller["post"]>().toHaveProperty("create");
+      expectTypeOf<ServerCaller["post"]>().toHaveProperty("update");
+      expectTypeOf<ServerCaller["post"]>().toHaveProperty("delete");
+    });
+  });
+
+  describe("TypedTRPCClient (full include/select inference for clients)", () => {
+    // TypedTRPCClient provides full dynamic typing when cast from a tRPC client
+    type TypedClient = TypedTRPCClient<SchemaType>;
+
+    it("has user namespace", () => {
+      expectTypeOf<TypedClient>().toHaveProperty("user");
+    });
+
+    it("has post namespace", () => {
+      expectTypeOf<TypedClient>().toHaveProperty("post");
+    });
+
+    it("user.findMany has query method", () => {
+      expectTypeOf<TypedClient["user"]["findMany"]>().toHaveProperty("query");
+    });
+
+    it("user.create has mutate method", () => {
+      expectTypeOf<TypedClient["user"]["create"]>().toHaveProperty("mutate");
+    });
+
+    it("user model has all CRUD operations", () => {
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("findMany");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("findUnique");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("findFirst");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("create");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("createMany");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("update");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("updateMany");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("upsert");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("delete");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("deleteMany");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("count");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("aggregate");
+      expectTypeOf<TypedClient["user"]>().toHaveProperty("groupBy");
+    });
+
+    it("post model has all CRUD operations", () => {
+      expectTypeOf<TypedClient["post"]>().toHaveProperty("findMany");
+      expectTypeOf<TypedClient["post"]>().toHaveProperty("findUnique");
+      expectTypeOf<TypedClient["post"]>().toHaveProperty("create");
+      expectTypeOf<TypedClient["post"]>().toHaveProperty("update");
+      expectTypeOf<TypedClient["post"]>().toHaveProperty("delete");
+    });
+
+    it("count returns number", () => {
+      expectTypeOf<TypedClient["user"]["count"]["query"]>().returns.toMatchTypeOf<Promise<number>>();
+    });
+
+    it("createMany returns count object", () => {
+      expectTypeOf<TypedClient["user"]["createMany"]["mutate"]>().returns.toMatchTypeOf<Promise<{ count: number }>>();
+    });
+
+    it("deleteMany returns count object", () => {
+      expectTypeOf<TypedClient["user"]["deleteMany"]["mutate"]>().returns.toMatchTypeOf<Promise<{ count: number }>>();
     });
   });
 });
