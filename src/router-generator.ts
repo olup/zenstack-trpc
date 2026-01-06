@@ -1,4 +1,4 @@
-import { TRPCError, initTRPC } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
 import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
 import type {
   FindManyArgs,
@@ -15,7 +15,6 @@ import type {
   AggregateArgs,
   GroupByArgs,
   SimplifiedPlainResult,
-  PlainModel,
 } from "@zenstackhq/orm";
 import { z } from "zod";
 import { createModelSchemas } from "./zod-schemas.js";
