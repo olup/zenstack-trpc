@@ -1,4 +1,4 @@
-import { TRPCError } from "@trpc/server";
+import { TRPCError, initTRPC } from "@trpc/server";
 import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
 import type {
   FindManyArgs,
@@ -15,6 +15,7 @@ import type {
   AggregateArgs,
   GroupByArgs,
   SimplifiedPlainResult,
+  PlainModel,
 } from "@zenstackhq/orm";
 import { z } from "zod";
 import { createModelSchemas } from "./zod-schemas.js";
@@ -219,34 +220,33 @@ function createModelProcedures<Schema extends SchemaDef>(
  * The router follows the pattern: router.modelName.operation
  * Example: router.user.findMany(), router.post.create()
  *
- * For proper typing on the caller, use the TypedRouterCaller type:
- *
  * @example
  * ```ts
- * import { createZenStackRouter, TypedRouterCaller } from 'zenstack-trpc';
+ * import { createZenStackRouter, ZenStackRouter } from 'zenstack-trpc';
  * import { initTRPC } from '@trpc/server';
  * import { schema, SchemaType } from './zenstack/schema';
  *
  * // Create your own tRPC instance with your context
- * const t = initTRPC.context<{ db: any }>().create();
+ * const t = initTRPC.context<{ db: typeof dbClient }>().create();
  *
- * // Generate the router
+ * // Generate the router with full type inference
  * const appRouter = createZenStackRouter(schema, t);
  *
- * // Create a typed caller with FULL type inference
- * const caller = appRouter.createCaller({ db }) as TypedRouterCaller<SchemaType>;
- *
- * // Types are fully inferred based on your query!
- * const users = await caller.user.findMany();
- * // ^? { id: string, email: string, name: string | null, ... }[]
- *
+ * // Export the typed router for clients
  * export type AppRouter = typeof appRouter;
+ *
+ * // Client usage (with full type inference):
+ * // const client = createTRPCClient<AppRouter>({ ... });
+ * // const users = await client.user.findMany.query(); // Fully typed!
  * ```
  */
-export function createZenStackRouter<Schema extends SchemaDef>(
+export function createZenStackRouter<
+  Schema extends SchemaDef,
+  TContext extends { db: any }
+>(
   schema: Schema,
   t: TRPCInstance
-) {
+): ZenStackRouter<Schema, TContext> {
   const modelRouters: Record<string, ReturnType<typeof createModelProcedures>> = {};
 
   // Get all model names from the schema
@@ -257,12 +257,127 @@ export function createZenStackRouter<Schema extends SchemaDef>(
     modelRouters[modelNameLower] = createModelProcedures(schema, modelName, t);
   }
 
-  return t.router(modelRouters);
+  return t.router(modelRouters) as ZenStackRouter<Schema, TContext>;
 }
 
 /**
- * Type helper to extract the router type for a given schema
+ * Type for a query procedure with proper input/output typing
+ * Matches tRPC's internal structure for type inference
  */
-export type ZenStackRouter<Schema extends SchemaDef> = ReturnType<
-  typeof createZenStackRouter<Schema>
->;
+type TypedQueryProcedure<TInput, TOutput> = {
+  _def: {
+    $types: {
+      input: TInput;
+      output: TOutput;
+    };
+    procedure: true;
+    type: 'query';
+    meta: unknown;
+    experimental_caller: boolean;
+  };
+};
+
+/**
+ * Type for a mutation procedure with proper input/output typing
+ * Matches tRPC's internal structure for type inference
+ */
+type TypedMutationProcedure<TInput, TOutput> = {
+  _def: {
+    $types: {
+      input: TInput;
+      output: TOutput;
+    };
+    procedure: true;
+    type: 'mutation';
+    meta: unknown;
+    experimental_caller: boolean;
+  };
+};
+
+/**
+ * Type for a single model's tRPC procedures (for client inference)
+ * This maps each operation to its tRPC procedure type with proper input/output
+ */
+export type TRPCModelProcedures<
+  Schema extends SchemaDef,
+  Model extends GetModels<Schema>,
+  TContext
+> = {
+  findMany: TypedQueryProcedure<
+    FindManyArgs<Schema, Model> | undefined,
+    SimplifiedPlainResult<Schema, Model, {}>[]
+  >;
+  findUnique: TypedQueryProcedure<
+    FindUniqueArgs<Schema, Model>,
+    SimplifiedPlainResult<Schema, Model, {}> | null
+  >;
+  findFirst: TypedQueryProcedure<
+    FindFirstArgs<Schema, Model> | undefined,
+    SimplifiedPlainResult<Schema, Model, {}> | null
+  >;
+  create: TypedMutationProcedure<
+    CreateArgs<Schema, Model>,
+    SimplifiedPlainResult<Schema, Model, {}>
+  >;
+  createMany: TypedMutationProcedure<
+    CreateManyArgs<Schema, Model>,
+    { count: number }
+  >;
+  update: TypedMutationProcedure<
+    UpdateArgs<Schema, Model>,
+    SimplifiedPlainResult<Schema, Model, {}>
+  >;
+  updateMany: TypedMutationProcedure<
+    UpdateManyArgs<Schema, Model>,
+    { count: number }
+  >;
+  upsert: TypedMutationProcedure<
+    UpsertArgs<Schema, Model>,
+    SimplifiedPlainResult<Schema, Model, {}>
+  >;
+  delete: TypedMutationProcedure<
+    DeleteArgs<Schema, Model>,
+    SimplifiedPlainResult<Schema, Model, {}>
+  >;
+  deleteMany: TypedMutationProcedure<
+    DeleteManyArgs<Schema, Model>,
+    { count: number }
+  >;
+  count: TypedQueryProcedure<
+    CountArgs<Schema, Model> | undefined,
+    number
+  >;
+  aggregate: TypedQueryProcedure<
+    AggregateArgs<Schema, Model>,
+    any
+  >;
+  groupBy: TypedQueryProcedure<
+    GroupByArgs<Schema, Model>,
+    any[]
+  >;
+};
+
+/**
+ * Type for the full router record that tRPC uses for inference
+ */
+export type ZenStackRouterRecord<Schema extends SchemaDef, TContext> = {
+  [K in GetModels<Schema> as Uncapitalize<K>]: TRPCModelProcedures<Schema, K, TContext>;
+};
+
+/**
+ * The typed router type that clients can use for proper inference
+ */
+export type ZenStackRouter<Schema extends SchemaDef, TContext = any> = {
+  _def: {
+    _config: {
+      $types: {
+        ctx: TContext;
+        meta: object;
+        errorShape: any;
+        transformer: false;
+      };
+    };
+    record: ZenStackRouterRecord<Schema, TContext>;
+  };
+  createCaller: (ctx: TContext) => TypedRouterCaller<Schema>;
+};

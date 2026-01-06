@@ -55,6 +55,7 @@
     "zod": ">=3.0.0 || >=4.0.0"
   },
   "devDependencies": {
+    "@trpc/client": "^11.8.1",
     "@trpc/server": "^11.8.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.3",

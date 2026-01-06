@@ -7,23 +7,13 @@ settings:
 importers:
 
   .:
-    dependencies:
+    devDependencies:
+      '@trpc/client':
+        specifier: ^11.8.1
+        version: 11.8.1(@trpc/server@11.8.1(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/server':
         specifier: ^11.8.1
         version: 11.8.1(typescript@5.9.3)
-      '@zenstackhq/orm':
-        specifier: ^3.1.0
-        version: 3.1.0(better-sqlite3@12.5.0)(zod@4.3.5)
-      better-sqlite3:
-        specifier: ^12.5.0
-        version: 12.5.0
-      kysely:
-        specifier: ^0.28.9
-        version: 0.28.9
-      zod:
-        specifier: ^4.3.5
-        version: 4.3.5
-    devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -33,6 +23,15 @@ importers:
       '@zenstackhq/cli':
         specifier: ^3.1.0
         version: 3.1.0(typescript@5.9.3)
+      '@zenstackhq/orm':
+        specifier: ^3.1.0
+        version: 3.1.0(better-sqlite3@12.5.0)(zod@4.3.5)
+      better-sqlite3:
+        specifier: ^12.5.0
+        version: 12.5.0
+      kysely:
+        specifier: ^0.28.9
+        version: 0.28.9
       prisma:
         specifier: ^7.2.0
         version: 7.2.0(@types/react@19.2.7)(better-sqlite3@12.5.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
@@ -45,6 +44,9 @@ importers:
       vitest:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@25.0.3)(jiti@2.6.1)(tsx@4.21.0)
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
 
 packages:
 
@@ -454,6 +456,12 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@trpc/client@11.8.1':
+    resolution: {integrity: sha512-L/SJFGanr9xGABmuDoeXR4xAdHJmsXsiF9OuH+apecJ+8sUITzVT1EPeqp0ebqA6lBhEl5pPfg3rngVhi/h60Q==}
+    peerDependencies:
+      '@trpc/server': 11.8.1
+      typescript: '>=5.7.2'
 
   '@trpc/server@11.8.1':
     resolution: {integrity: sha512-P4rzZRpEL7zDFgjxK65IdyH0e41FMFfTkQkuq0BA5tKcr7E6v9/v38DEklCpoDN6sPiB1Sigy/PUEzHENhswDA==}
@@ -1766,6 +1774,11 @@ snapshots:
   '@sindresorhus/merge-streams@4.0.0': {}
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@trpc/client@11.8.1(@trpc/server@11.8.1(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@trpc/server': 11.8.1(typescript@5.9.3)
+      typescript: 5.9.3
 
   '@trpc/server@11.8.1(typescript@5.9.3)':
     dependencies:

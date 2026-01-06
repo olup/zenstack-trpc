@@ -31,6 +31,8 @@
 export {
   createZenStackRouter,
   type ZenStackRouter,
+  type ZenStackRouterRecord,
+  type TRPCModelProcedures,
   type TypedRouterCaller,
   type TypedModelProcedures,
   type TRPCInstance,
