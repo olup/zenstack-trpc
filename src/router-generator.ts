@@ -261,7 +261,7 @@ export function createZenStackRouter<
 
 /**
  * Type for a query procedure with proper input/output typing
- * Matches tRPC's internal structure for type inference
+ * Matches tRPC's internal Procedure interface for type inference
  */
 type TypedQueryProcedure<TInput, TOutput> = {
   _def: {
@@ -273,12 +273,15 @@ type TypedQueryProcedure<TInput, TOutput> = {
     type: 'query';
     meta: unknown;
     experimental_caller: boolean;
+    inputs: unknown[];
   };
+  meta: unknown;
+  (opts: unknown): Promise<TOutput>;
 };
 
 /**
  * Type for a mutation procedure with proper input/output typing
- * Matches tRPC's internal structure for type inference
+ * Matches tRPC's internal Procedure interface for type inference
  */
 type TypedMutationProcedure<TInput, TOutput> = {
   _def: {
@@ -290,7 +293,10 @@ type TypedMutationProcedure<TInput, TOutput> = {
     type: 'mutation';
     meta: unknown;
     experimental_caller: boolean;
+    inputs: unknown[];
   };
+  meta: unknown;
+  (opts: unknown): Promise<TOutput>;
 };
 
 /**
