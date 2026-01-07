@@ -1,6 +1,6 @@
 {
   "name": "zenstack-trpc",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Auto-generate type-safe tRPC routers from ZenStack V3 schemas",
   "type": "module",
   "main": "./dist/index.js",
