@@ -53,11 +53,23 @@
   },
   "peerDependencies": {
     "@trpc/server": ">=11.0.0",
+    "@trpc/react-query": ">=11.0.0",
+    "@tanstack/react-query": ">=5.0.0",
     "@zenstackhq/orm": ">=3.0.0",
     "zod": ">=3.0.0 || >=4.0.0"
   },
+  "peerDependenciesMeta": {
+    "@trpc/react-query": {
+      "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@tanstack/react-query": "^5.90.16",
     "@trpc/client": "^11.8.1",
+    "@trpc/react-query": "^11.8.1",
     "@trpc/server": "^11.8.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.3",

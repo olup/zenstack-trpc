@@ -146,91 +146,108 @@ const usersWithPosts = await caller.user.findMany({ include: { posts: true } });
 // Type: (User & { posts: Post[] })[]
 ```
 
-### `withZenStackTypes<SchemaType>()`
+### Composable Type System
 
-Utility function that adds full `include`/`select` type inference to any tRPC client. This solves tRPC's limitation where generic type information is lost during type inference.
+The library provides a composable type system for adding full `include`/`select` type inference to tRPC clients. This solves tRPC's limitation where generic type information is lost during type inference.
 
-Works with both vanilla tRPC clients and React hooks:
+The system uses three composable parts:
+1. **`WithZenStack<Schema, Path?>`** - Base type container with your schema and optional nesting path
+2. **`WithReact<...>` / `WithClient<...>`** - Adapter that transforms to React hooks or vanilla client types
+3. **`typedClient<Typed>()`** - Applies the composed types to your client
 
 ```typescript
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
-import { withZenStackTypes } from "zenstack-trpc";
+import { typedClient, type WithZenStack, type WithReact } from "zenstack-trpc";
 import type { AppRouter } from "./server/trpc.js";
 import type { SchemaType } from "./zenstack/schema.js";
 
-// For vanilla tRPC client:
-const client = withZenStackTypes<SchemaType>()(
-  createTRPCClient<AppRouter>({
-    links: [httpBatchLink({ url: "http://localhost:3000/trpc" })],
-  })
-);
+// Compose your types
+type Typed = WithReact<WithZenStack<SchemaType>>;
+
+// Apply to client
+const _trpc = createTRPCReact<AppRouter>();
+export const trpc = typedClient<Typed>()(_trpc);
 
 // Now includes are fully typed!
-const usersWithPosts = await client.user.findMany.query({
-  include: { posts: true }
-});
-// Type: (User & { posts: Post[] })[]
-
-// For tRPC React hooks:
-const trpc = withZenStackTypes<SchemaType>()(
-  createTRPCReact<AppRouter>()
-);
-
-// In your component:
 const { data } = trpc.user.findMany.useQuery({
   include: { posts: true }
 });
 // data is typed as (User & { posts: Post[] })[] | undefined
 ```
 
-You can also use the type helpers directly if you prefer manual casting:
+For vanilla tRPC clients, use `WithClient`:
 
 ```typescript
-import type { TypedTRPCClient, TypedTRPCReact } from "zenstack-trpc";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import { typedClient, type WithZenStack, type WithClient } from "zenstack-trpc";
 
-const client = _client as unknown as TypedTRPCClient<SchemaType>;
-const trpc = _trpc as unknown as TypedTRPCReact<SchemaType>;
+type Typed = WithClient<WithZenStack<SchemaType>>;
+
+const _client = createTRPCClient<AppRouter>({
+  links: [httpBatchLink({ url: "http://localhost:3000/trpc" })],
+});
+export const client = typedClient<Typed>()(_client);
+
+const usersWithPosts = await client.user.findMany.query({
+  include: { posts: true }
+});
+// Type: (User & { posts: Post[] })[]
 ```
 
 ### Nested Namespaces (Merged Routers)
 
-When your ZenStack router is merged under a namespace in your main router, pass the namespace path to `withZenStackTypes()`:
+When your ZenStack router is merged under a namespace, include the path in `WithZenStack`:
 
 ```typescript
 // If your router structure is:
 // appRouter = t.router({
-//   db: zenStackRouter,  // ZenStack models under 'db' namespace
+//   generated: zenStackRouter,  // ZenStack models under 'generated' namespace
 //   auth: authRouter,
 // })
 
-import { createTRPCReact } from "@trpc/react-query";
-import type { AppRouter } from "./server/trpc.js";
-import type { SchemaType } from "./zenstack/schema.js";
-import { withZenStackTypes } from "zenstack-trpc";
-
-const _trpc = createTRPCReact<AppRouter>();
+import { typedClient, type WithZenStack, type WithReact } from "zenstack-trpc";
 
 // Single level nesting:
-export const trpc = withZenStackTypes<SchemaType>('db')(_trpc);
+type Typed = WithReact<WithZenStack<SchemaType, "generated">>;
+export const trpc = typedClient<Typed>()(_trpc);
 
 // Multi-level nesting (dot notation):
-// export const trpc = withZenStackTypes<SchemaType>('api.db')(_trpc);
+type Typed = WithReact<WithZenStack<SchemaType, "api.db">>;
+export const trpc = typedClient<Typed>()(_trpc);
 
 // Now you can use:
-// trpc.db.user.findMany.useQuery({ include: { posts: true } }) // fully typed
+// trpc.generated.user.findMany.useQuery({ include: { posts: true } }) // fully typed
 // trpc.auth.login.useMutation() // other routers unaffected
 ```
 
-For manual type casting, you can also use `WithZenStackTypes`:
+### Custom Adapters
+
+The composable architecture allows third parties to create custom adapters. An adapter transforms `WithZenStack` into framework-specific types:
 
 ```typescript
-import type { WithZenStackTypes } from "zenstack-trpc";
+import type { WithZenStack, TypedTRPCReact } from "zenstack-trpc";
 
-type TypedTRPC = Omit<typeof _trpc, 'db'> & {
-  db: WithZenStackTypes<SchemaType, 'react'>
-};
-export const trpc = _trpc as unknown as TypedTRPC;
+// Example: Custom adapter for a hypothetical framework
+type WithMyFramework<T extends WithZenStack<any, any>> =
+  T extends WithZenStack<infer S, infer P>
+    ? { readonly __types: MyFrameworkTypes<S>; readonly __path: P }
+    : never;
+
+// Usage:
+type Typed = WithMyFramework<WithZenStack<SchemaType, "db">>;
+const client = typedClient<Typed>()(myFrameworkClient);
+```
+
+### Direct Type Access
+
+For advanced use cases, you can access the underlying types directly:
+
+```typescript
+import type { TypedTRPCClient, TypedTRPCReact } from "zenstack-trpc";
+
+// Manual casting
+const client = _client as unknown as TypedTRPCClient<SchemaType>;
+const trpc = _trpc as unknown as TypedTRPCReact<SchemaType>;
 ```
 
 ### Zod Schema Access
@@ -249,6 +266,11 @@ const userSchemas = createModelSchemas(schema, "User");
 - ZenStack V3 (`@zenstackhq/orm` >= 3.0.0)
 - tRPC >= 11.0.0
 - Zod >= 3.0.0
+
+### Optional (for React hooks)
+
+- `@trpc/react-query` >= 11.0.0
+- `@tanstack/react-query` >= 5.0.0
 
 ## License
 

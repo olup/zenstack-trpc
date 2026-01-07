@@ -2,26 +2,24 @@
  * Typed tRPC client helpers for full include/select type inference.
  *
  * tRPC's standard type inference loses generic type information for procedure
- * input/output types. This module provides type utilities that restore full
- * dynamic typing based on include/select options.
+ * input/output types. This module provides a composable type system that
+ * restores full dynamic typing based on include/select options.
  *
  * @example
  * ```typescript
- * import { createTRPCClient } from "@trpc/client";
  * import { createTRPCReact } from "@trpc/react-query";
- * import { withZenStackTypes } from "zenstack-trpc";
+ * import { typedClient, type WithZenStack, type WithReact } from "zenstack-trpc";
  * import type { AppRouter } from "./server/trpc.js";
  * import type { SchemaType } from "./zenstack/schema.js";
  *
- * // Vanilla client
- * const client = withZenStackTypes<SchemaType>()(
- *   createTRPCClient<AppRouter>({ links: [...] })
- * );
+ * // Compose types and apply to client
+ * type Typed = WithReact<WithZenStack<SchemaType>>;
+ * const _trpc = createTRPCReact<AppRouter>();
+ * export const trpc = typedClient<Typed>()(_trpc);
  *
- * // React hooks
- * const trpc = withZenStackTypes<SchemaType>()(
- *   createTRPCReact<AppRouter>()
- * );
+ * // With nested namespace
+ * type Typed = WithReact<WithZenStack<SchemaType, "db">>;
+ * export const trpc = typedClient<Typed>()(_trpc);
  * ```
  */
 
@@ -42,9 +40,16 @@ import type {
   GroupByArgs,
   SimplifiedPlainResult,
 } from "@zenstackhq/orm";
+import type {
+  UseQueryResult,
+  UseMutationResult,
+  UseMutationOptions,
+  UseQueryOptions,
+} from "@tanstack/react-query";
+import type { TRPCClientErrorLike } from "@trpc/client";
 
-/** Convert model names to lowercase */
-type Uncapitalize<S extends string> = S extends `${infer F}${infer R}` ? `${Lowercase<F>}${R}` : S;
+/** Convert model names to lowercase (internal utility, also used by router-generator) */
+export type Uncapitalize<S extends string> = S extends `${infer F}${infer R}` ? `${Lowercase<F>}${R}` : S;
 
 /** Infer result type with optional array wrapping */
 type Result<S extends SchemaDef, M extends GetModels<S>, T, D, Arr extends boolean = false> =
@@ -135,8 +140,8 @@ type ClientProcedure<S extends SchemaDef, M extends GetModels<S>, Op extends key
               Op extends NullableOps ? DefaultResult<S, M> | null : Op extends ArrayOps ? DefaultResult<S, M>[] : DefaultResult<S, M>,
               Op extends ArrayOps ? true : false>;
 
-/** All client procedures for a model */
-export type TypedClientModelProcedures<S extends SchemaDef, M extends GetModels<S>> = {
+/** All client procedures for a model (internal) */
+type TypedClientModelProcedures<S extends SchemaDef, M extends GetModels<S>> = {
   [Op in keyof OperationArgs<S, M>]: ClientProcedure<S, M, Op>;
 };
 
@@ -144,35 +149,40 @@ export type TypedClientModelProcedures<S extends SchemaDef, M extends GetModels<
 // React Query / tRPC React Hook Types
 // =============================================================================
 
-/** Base query result shape */
-type QueryResult<T> = { data: T | undefined; error: Error | null; isLoading: boolean; isPending: boolean; isError: boolean; isSuccess: boolean; refetch: () => Promise<unknown>; [k: string]: unknown };
+/** tRPC hook result extension */
+type TRPCHookResult = { trpc: { path: string } };
 
-/** Base mutation result shape */
-type MutationResult<T, V> = { data: T | undefined; error: Error | null; isLoading: boolean; isPending: boolean; isError: boolean; isSuccess: boolean; mutate: (v: V, o?: { onSuccess?: (d: T) => void; onError?: (e: Error) => void; onSettled?: () => void }) => void; mutateAsync: (v: V, o?: { onSuccess?: (d: T) => void; onError?: (e: Error) => void; onSettled?: () => void }) => Promise<T>; [k: string]: unknown };
+/** Query result with tRPC extension */
+type TRPCQueryResult<TData, TError = TRPCClientErrorLike<any>> = UseQueryResult<TData, TError> & TRPCHookResult;
+
+/** Mutation result with tRPC extension */
+type TRPCMutationResult<TData, TError, TVariables, TContext = unknown> = UseMutationResult<TData, TError, TVariables, TContext> & TRPCHookResult;
+
+/** Query options type */
+type QueryOpts<TData, TError = TRPCClientErrorLike<any>> = Omit<UseQueryOptions<TData, TError, TData, any>, 'queryKey' | 'queryFn'>;
+
+/** Mutation options type */
+type MutationOpts<TData, TError, TVariables, TContext = unknown> = Omit<UseMutationOptions<TData, TError, TVariables, TContext>, 'mutationKey' | 'mutationFn'>;
 
 /** Query hook - infers result from input */
 interface DynamicQueryHook<S extends SchemaDef, M extends GetModels<S>, Args, Default, Arr extends boolean> {
-  useQuery<T extends Args>(input: T, opts?: { enabled?: boolean; [k: string]: unknown }): QueryResult<Result<S, M, T, Default, Arr>>;
-  useQuery(input?: undefined, opts?: { enabled?: boolean; [k: string]: unknown }): QueryResult<Default>;
+  useQuery<T extends Args>(input: T, opts?: QueryOpts<Result<S, M, T, Default, Arr>>): TRPCQueryResult<Result<S, M, T, Default, Arr>>;
+  useQuery(input?: undefined, opts?: QueryOpts<Default>): TRPCQueryResult<Default>;
 }
 
 /** Simple query hook - fixed result type */
 interface SimpleQueryHook<Args, R> {
-  useQuery(input?: Args, opts?: { enabled?: boolean; [k: string]: unknown }): QueryResult<R>;
+  useQuery(input?: Args, opts?: QueryOpts<R>): TRPCQueryResult<R>;
 }
 
 /** Mutation hook - infers result from input */
 interface DynamicMutationHook<S extends SchemaDef, M extends GetModels<S>, Args, Default> {
-  useMutation(opts?: { onSuccess?: (d: any) => void; onError?: (e: Error) => void; onSettled?: () => void; [k: string]: unknown }): {
-    mutate: <T extends Args>(input: T, o?: { onSuccess?: (d: Result<S, M, T, Default>) => void; onError?: (e: Error) => void; onSettled?: () => void }) => void;
-    mutateAsync: <T extends Args>(input: T, o?: { onSuccess?: (d: Result<S, M, T, Default>) => void; onError?: (e: Error) => void; onSettled?: () => void }) => Promise<Result<S, M, T, Default>>;
-    data: Default | undefined; error: Error | null; isLoading: boolean; isPending: boolean; isError: boolean; isSuccess: boolean; [k: string]: unknown;
-  };
+  useMutation<TContext = unknown>(opts?: MutationOpts<Default, TRPCClientErrorLike<any>, Args, TContext>): TRPCMutationResult<Default, TRPCClientErrorLike<any>, Args, TContext>;
 }
 
 /** Simple mutation hook - fixed result type */
 interface SimpleMutationHook<Args, R> {
-  useMutation(opts?: { onSuccess?: (d: R) => void; onError?: (e: Error) => void; onSettled?: () => void; [k: string]: unknown }): MutationResult<R, Args>;
+  useMutation<TContext = unknown>(opts?: MutationOpts<R, TRPCClientErrorLike<any>, Args, TContext>): TRPCMutationResult<R, TRPCClientErrorLike<any>, Args, TContext>;
 }
 
 /** Build React hook type for an operation */
@@ -191,8 +201,8 @@ type ReactHook<S extends SchemaDef, M extends GetModels<S>, Op extends keyof Ope
               Op extends NullableOps ? DefaultResult<S, M> | null : Op extends ArrayOps ? DefaultResult<S, M>[] : DefaultResult<S, M>,
               Op extends ArrayOps ? true : false>;
 
-/** All React hooks for a model */
-export type TypedReactModelHooks<S extends SchemaDef, M extends GetModels<S>> = {
+/** All React hooks for a model (internal) */
+type TypedReactModelHooks<S extends SchemaDef, M extends GetModels<S>> = {
   [Op in keyof OperationArgs<S, M>]: ReactHook<S, M, Op>;
 };
 
@@ -211,106 +221,92 @@ export type TypedTRPCReact<S extends SchemaDef> = {
 };
 
 // =============================================================================
-// Type Converter Utilities
+// Composable Type Utilities
 // =============================================================================
 
-/** Detect if client is React-based */
-type IsReactClient<T> = T extends { useQuery: any } | { useMutation: any } ? true : false;
-
-/** Get the appropriate types based on client type */
-type InferClientTypes<S extends SchemaDef, T> =
-  IsReactClient<T> extends true ? TypedTRPCReact<S> : TypedTRPCClient<S>;
-
-/** Result type with optional path application */
-type WithZenStackResult<S extends SchemaDef, T, TPath extends string | undefined> =
-  TPath extends string
-    ? ApplyAtPath<T, TPath, InferClientTypes<S, T>>
-    : InferClientTypes<S, T>;
-
 /**
- * Converts a tRPC client or React hooks instance to a fully typed version
- * with include/select inference. This is a type-only transformation.
- *
- * Supports optional path parameter for nested namespaces with dot notation.
+ * Base ZenStack type container. Use with adapter types like WithReact or WithClient.
  *
  * @example
  * ```typescript
- * // For vanilla tRPC client (root level):
- * const client = withZenStackTypes<SchemaType>()(createTRPCClient<AppRouter>({ links: [...] }));
+ * // With React adapter:
+ * type Typed = WithReact<WithZenStack<SchemaType, "generated">>;
  *
- * // For tRPC React hooks (root level):
- * const trpc = withZenStackTypes<SchemaType>()(createTRPCReact<AppRouter>());
+ * // With vanilla client adapter:
+ * type Typed = WithClient<WithZenStack<SchemaType, "db">>;
  *
- * // With nested namespace (single level):
- * const trpc = withZenStackTypes<SchemaType>('db')(createTRPCReact<AppRouter>());
- *
- * // With nested namespace (multi-level):
- * const trpc = withZenStackTypes<SchemaType>('api.db')(createTRPCReact<AppRouter>());
+ * // At root level (no nesting):
+ * type Typed = WithReact<WithZenStack<SchemaType>>;
  * ```
  */
-export function withZenStackTypes<S extends SchemaDef, TPath extends string | undefined = undefined>(_path?: TPath) {
-  return <T>(client: T): WithZenStackResult<S, T, TPath> => {
-    return client as any;
-  };
+export type WithZenStack<S extends SchemaDef, TPath extends string | undefined = undefined> = {
+  readonly __schema: S;
+  readonly __path: TPath;
+};
+
+/**
+ * React Query adapter - transforms WithZenStack into tRPC React hook types.
+ *
+ * @example
+ * ```typescript
+ * type Typed = WithReact<WithZenStack<SchemaType, "generated">>;
+ * const trpc = typedClient<Typed>()(_trpc);
+ * ```
+ */
+export type WithReact<T extends WithZenStack<any, any>> =
+  T extends WithZenStack<infer S, infer P>
+    ? { readonly __types: TypedTRPCReact<S>; readonly __path: P }
+    : never;
+
+/**
+ * Vanilla tRPC client adapter - transforms WithZenStack into vanilla client types.
+ *
+ * @example
+ * ```typescript
+ * type Typed = WithClient<WithZenStack<SchemaType, "db">>;
+ * const client = typedClient<Typed>()(rawClient);
+ * ```
+ */
+export type WithClient<T extends WithZenStack<any, any>> =
+  T extends WithZenStack<infer S, infer P>
+    ? { readonly __types: TypedTRPCClient<S>; readonly __path: P }
+    : never;
+
+/** Extract the final types from an adapter */
+type ExtractTypes<T> = T extends { readonly __types: infer Types } ? Types : never;
+
+/** Extract the path from an adapter */
+type ExtractPath<T> = T extends { readonly __path: infer P } ? P : undefined;
+
+/** Apply the typed transformation to a client */
+type ApplyTyped<TClient, T> =
+  ExtractPath<T> extends string
+    ? ApplyAtPath<TClient, ExtractPath<T>, ExtractTypes<T>>
+    : ExtractTypes<T>;
+
+/**
+ * Apply composed types to a tRPC client.
+ *
+ * @example
+ * ```typescript
+ * // Define composed types
+ * type Typed = WithReact<WithZenStack<SchemaType, "generated">>;
+ *
+ * // Apply to client
+ * const _trpc = createTRPCReact<AppRouter>();
+ * export const trpc = typedClient<Typed>()(_trpc);
+ * ```
+ */
+export function typedClient<T extends { readonly __types: any; readonly __path: any }>() {
+  return <TClient>(client: TClient): ApplyTyped<TClient, T> => client as any;
 }
-
-/**
- * Type utility to add ZenStack types to a nested namespace within a tRPC client.
- *
- * @example
- * ```typescript
- * type TypedTRPC = Omit<typeof _trpc, 'db'> & { db: WithZenStackTypes<SchemaType, 'react'> };
- * export const trpc = _trpc as unknown as TypedTRPC;
- * ```
- */
-export type WithZenStackTypes<S extends SchemaDef, Mode extends 'client' | 'react' = 'react'> =
-  Mode extends 'react' ? TypedTRPCReact<S> : TypedTRPCClient<S>;
 
 // =============================================================================
 // Deep Nesting Type Utilities
 // =============================================================================
 
-/** Split a dot-separated path into head and tail */
-type SplitPath<P extends string> = P extends `${infer Head}.${infer Tail}` ? [Head, Tail] : [P, never];
-
 /** Recursively apply types at a nested path */
 type ApplyAtPath<TClient, Path extends string, TTypes> =
-  SplitPath<Path> extends [infer Head extends string, infer Tail]
-    ? Tail extends never
-      ? Omit<TClient, Head> & { [K in Head]: TTypes }
-      : Omit<TClient, Head> & { [K in Head]: Head extends keyof TClient ? ApplyAtPath<TClient[Head], Tail & string, TTypes> : TTypes }
-    : TClient;
-
-/**
- * Helper function to type a nested namespace within your tRPC React hooks.
- * Supports dot-notation for deep nesting.
- *
- * @example
- * ```typescript
- * // Single level nesting
- * export const trpc = withNestedZenStackReact<SchemaType, typeof _trpc, 'db'>('db')(_trpc);
- *
- * // Multi-level nesting
- * export const trpc = withNestedZenStackReact<SchemaType, typeof _trpc, 'api.db'>('api.db')(_trpc);
- * ```
- */
-export function withNestedZenStackReact<S extends SchemaDef, TClient, TPath extends string>(_path: TPath) {
-  return (client: TClient): ApplyAtPath<TClient, TPath, TypedTRPCReact<S>> => client as any;
-}
-
-/**
- * Helper function to type a nested namespace within your vanilla tRPC client.
- * Supports dot-notation for deep nesting.
- *
- * @example
- * ```typescript
- * // Single level nesting
- * export const client = withNestedZenStackClient<SchemaType, typeof _client, 'db'>('db')(_client);
- *
- * // Multi-level nesting
- * export const client = withNestedZenStackClient<SchemaType, typeof _client, 'api.db'>('api.db')(_client);
- * ```
- */
-export function withNestedZenStackClient<S extends SchemaDef, TClient, TPath extends string>(_path: TPath) {
-  return (client: TClient): ApplyAtPath<TClient, TPath, TypedTRPCClient<S>> => client as any;
-}
+  Path extends `${infer Head}.${infer Tail}`
+    ? Omit<TClient, Head> & { [K in Head]: Head extends keyof TClient ? ApplyAtPath<TClient[Head], Tail, TTypes> : TTypes }
+    : Omit<TClient, Path> & { [K in Path]: TTypes };

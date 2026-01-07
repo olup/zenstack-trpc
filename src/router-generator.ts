@@ -18,13 +18,7 @@ import type {
 } from "@zenstackhq/orm";
 import { z } from "zod";
 import { createModelSchemas } from "./zod-schemas.js";
-
-/**
- * Type helper to convert model names to lowercase
- */
-type Uncapitalize<S extends string> = S extends `${infer First}${infer Rest}`
-  ? `${Lowercase<First>}${Rest}`
-  : S;
+import type { Uncapitalize } from "./typed-client.js";
 
 /**
  * Type for a single model's procedures - provides FULL dynamic input AND output typing
@@ -302,8 +296,9 @@ type TypedMutationProcedure<TInput, TOutput> = {
 /**
  * Type for a single model's tRPC procedures (for client inference)
  * This maps each operation to its tRPC procedure type with proper input/output
+ * @internal
  */
-export type TRPCModelProcedures<
+type TRPCModelProcedures<
   Schema extends SchemaDef,
   Model extends GetModels<Schema>
 > = {
@@ -363,8 +358,9 @@ export type TRPCModelProcedures<
 
 /**
  * Type for the full router record that tRPC uses for inference
+ * @internal
  */
-export type ZenStackRouterRecord<Schema extends SchemaDef> = {
+type ZenStackRouterRecord<Schema extends SchemaDef> = {
   [K in GetModels<Schema> as Uncapitalize<K>]: TRPCModelProcedures<Schema, K>;
 };
 

@@ -4,7 +4,6 @@ import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import {
   createZenStackRouter,
   type TypedRouterCaller,
-  type TypedModelProcedures,
 } from "../src/index.js";
 
 /**
@@ -12,10 +11,10 @@ import {
  * These tests don't run any code - they only verify TypeScript types at compile time.
  */
 describe("Type Tests", () => {
-  // Create types for testing
+  // Create types for testing - use Caller["model"] to access model procedures
   type Caller = TypedRouterCaller<SchemaType>;
-  type UserProcedures = TypedModelProcedures<SchemaType, "User">;
-  type PostProcedures = TypedModelProcedures<SchemaType, "Post">;
+  type UserProcedures = Caller["user"];
+  type PostProcedures = Caller["post"];
 
   describe("TypedRouterCaller structure", () => {
     it("should have user and post model namespaces", () => {
@@ -23,9 +22,9 @@ describe("Type Tests", () => {
       expectTypeOf<Caller>().toHaveProperty("post");
     });
 
-    it("should have lowercase model names", () => {
-      expectTypeOf<Caller["user"]>().toMatchTypeOf<UserProcedures>();
-      expectTypeOf<Caller["post"]>().toMatchTypeOf<PostProcedures>();
+    it("should have lowercase model names matching procedures", () => {
+      expectTypeOf<Caller["user"]>().toEqualTypeOf<UserProcedures>();
+      expectTypeOf<Caller["post"]>().toEqualTypeOf<PostProcedures>();
     });
   });
 

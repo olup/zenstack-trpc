@@ -31,27 +31,20 @@
 export {
   createZenStackRouter,
   type ZenStackRouter,
-  type ZenStackRouterRecord,
-  type TRPCModelProcedures,
   type TypedRouterCaller,
-  type TypedModelProcedures,
   type TRPCInstance,
 } from "./router-generator.js";
 
 // Typed client helpers for full include/select inference
 export {
-  // Converter utilities
-  withZenStackTypes,
-  withNestedZenStackReact,
-  withNestedZenStackClient,
-  // Type helper for nested namespaces
-  type WithZenStackTypes,
-  // Vanilla tRPC client types
+  // Composable type system
+  type WithZenStack,
+  type WithReact,
+  type WithClient,
+  typedClient,
+  // Underlying types (for custom adapters)
   type TypedTRPCClient,
-  type TypedClientModelProcedures,
-  // React Query / tRPC React hook types
   type TypedTRPCReact,
-  type TypedReactModelHooks,
 } from "./typed-client.js";
 
 // Zod schema generators (for advanced usage)

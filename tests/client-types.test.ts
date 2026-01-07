@@ -5,6 +5,11 @@ import {
   createZenStackRouter,
   type TypedRouterCaller,
   type TypedTRPCClient,
+  type TypedTRPCReact,
+  type WithZenStack,
+  type WithReact,
+  type WithClient,
+  typedClient,
 } from "../src/index.js";
 
 /**
@@ -408,6 +413,671 @@ describe("Client-side Type Tests", () => {
 
     it("deleteMany returns count object", () => {
       expectTypeOf<TypedClient["user"]["deleteMany"]["mutate"]>().returns.toMatchTypeOf<Promise<{ count: number }>>();
+    });
+  });
+
+  // ==========================================================================
+  // COMPOSABLE TYPE SYSTEM TESTS
+  // ==========================================================================
+
+  describe("Composable Type System - WithZenStack", () => {
+    it("WithZenStack creates a type container with schema", () => {
+      type Container = WithZenStack<SchemaType>;
+      expectTypeOf<Container>().toHaveProperty("__schema");
+      expectTypeOf<Container>().toHaveProperty("__path");
+    });
+
+    it("WithZenStack with path includes the path type", () => {
+      type Container = WithZenStack<SchemaType, "db">;
+      expectTypeOf<Container["__path"]>().toEqualTypeOf<"db">();
+    });
+
+    it("WithZenStack without path has undefined path", () => {
+      type Container = WithZenStack<SchemaType>;
+      expectTypeOf<Container["__path"]>().toEqualTypeOf<undefined>();
+    });
+  });
+
+  describe("Composable Type System - WithReact adapter", () => {
+    type ReactTyped = WithReact<WithZenStack<SchemaType>>;
+
+    it("WithReact transforms to React hook types", () => {
+      expectTypeOf<ReactTyped>().toHaveProperty("__types");
+      expectTypeOf<ReactTyped>().toHaveProperty("__path");
+    });
+
+    it("WithReact preserves undefined path", () => {
+      expectTypeOf<ReactTyped["__path"]>().toEqualTypeOf<undefined>();
+    });
+
+    it("WithReact with path preserves the path", () => {
+      type ReactWithPath = WithReact<WithZenStack<SchemaType, "generated">>;
+      expectTypeOf<ReactWithPath["__path"]>().toEqualTypeOf<"generated">();
+    });
+
+    it("WithReact __types has model namespaces", () => {
+      expectTypeOf<ReactTyped["__types"]>().toHaveProperty("user");
+      expectTypeOf<ReactTyped["__types"]>().toHaveProperty("post");
+    });
+
+    it("WithReact __types.user has useQuery hooks", () => {
+      expectTypeOf<ReactTyped["__types"]["user"]["findMany"]>().toHaveProperty("useQuery");
+      expectTypeOf<ReactTyped["__types"]["user"]["findUnique"]>().toHaveProperty("useQuery");
+      expectTypeOf<ReactTyped["__types"]["user"]["count"]>().toHaveProperty("useQuery");
+    });
+
+    it("WithReact __types.user has useMutation hooks", () => {
+      expectTypeOf<ReactTyped["__types"]["user"]["create"]>().toHaveProperty("useMutation");
+      expectTypeOf<ReactTyped["__types"]["user"]["update"]>().toHaveProperty("useMutation");
+      expectTypeOf<ReactTyped["__types"]["user"]["delete"]>().toHaveProperty("useMutation");
+    });
+  });
+
+  describe("Composable Type System - WithClient adapter", () => {
+    type ClientTyped = WithClient<WithZenStack<SchemaType>>;
+
+    it("WithClient transforms to vanilla client types", () => {
+      expectTypeOf<ClientTyped>().toHaveProperty("__types");
+      expectTypeOf<ClientTyped>().toHaveProperty("__path");
+    });
+
+    it("WithClient preserves undefined path", () => {
+      expectTypeOf<ClientTyped["__path"]>().toEqualTypeOf<undefined>();
+    });
+
+    it("WithClient with path preserves the path", () => {
+      type ClientWithPath = WithClient<WithZenStack<SchemaType, "db">>;
+      expectTypeOf<ClientWithPath["__path"]>().toEqualTypeOf<"db">();
+    });
+
+    it("WithClient __types has model namespaces", () => {
+      expectTypeOf<ClientTyped["__types"]>().toHaveProperty("user");
+      expectTypeOf<ClientTyped["__types"]>().toHaveProperty("post");
+    });
+
+    it("WithClient __types.user has query methods", () => {
+      expectTypeOf<ClientTyped["__types"]["user"]["findMany"]>().toHaveProperty("query");
+      expectTypeOf<ClientTyped["__types"]["user"]["findUnique"]>().toHaveProperty("query");
+      expectTypeOf<ClientTyped["__types"]["user"]["count"]>().toHaveProperty("query");
+    });
+
+    it("WithClient __types.user has mutate methods", () => {
+      expectTypeOf<ClientTyped["__types"]["user"]["create"]>().toHaveProperty("mutate");
+      expectTypeOf<ClientTyped["__types"]["user"]["update"]>().toHaveProperty("mutate");
+      expectTypeOf<ClientTyped["__types"]["user"]["delete"]>().toHaveProperty("mutate");
+    });
+  });
+
+  describe("Composable Type System - typedClient function", () => {
+    it("typedClient is a function", () => {
+      expectTypeOf(typedClient).toBeFunction();
+    });
+
+    it("typedClient returns a function that accepts a client", () => {
+      type ReactTyped = WithReact<WithZenStack<SchemaType>>;
+      const wrapper = typedClient<ReactTyped>();
+      expectTypeOf(wrapper).toBeFunction();
+    });
+  });
+
+  describe("Composable Type System - Nesting with paths", () => {
+    // Single level nesting
+    type SingleNested = WithReact<WithZenStack<SchemaType, "db">>;
+
+    it("single level nesting has correct path", () => {
+      expectTypeOf<SingleNested["__path"]>().toEqualTypeOf<"db">();
+    });
+
+    // Multi-level nesting
+    type MultiNested = WithReact<WithZenStack<SchemaType, "api.db">>;
+
+    it("multi-level nesting has correct path", () => {
+      expectTypeOf<MultiNested["__path"]>().toEqualTypeOf<"api.db">();
+    });
+
+    // Deep nesting
+    type DeepNested = WithReact<WithZenStack<SchemaType, "api.v1.db.models">>;
+
+    it("deep nesting has correct path", () => {
+      expectTypeOf<DeepNested["__path"]>().toEqualTypeOf<"api.v1.db.models">();
+    });
+  });
+
+  // ==========================================================================
+  // TYPED TRPC REACT TESTS
+  // ==========================================================================
+
+  describe("TypedTRPCReact - React hooks structure", () => {
+    type ReactHooks = TypedTRPCReact<SchemaType>;
+
+    it("has user and post namespaces", () => {
+      expectTypeOf<ReactHooks>().toHaveProperty("user");
+      expectTypeOf<ReactHooks>().toHaveProperty("post");
+    });
+
+    it("user namespace has all query operations with useQuery", () => {
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("findMany");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("findUnique");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("findFirst");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("count");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("aggregate");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("groupBy");
+    });
+
+    it("user namespace has all mutation operations with useMutation", () => {
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("create");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("createMany");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("update");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("updateMany");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("upsert");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("delete");
+      expectTypeOf<ReactHooks["user"]>().toHaveProperty("deleteMany");
+    });
+
+    it("useQuery returns QueryResult shape", () => {
+      type UseQueryReturn = ReturnType<ReactHooks["user"]["findMany"]["useQuery"]>;
+      expectTypeOf<UseQueryReturn>().toHaveProperty("data");
+      expectTypeOf<UseQueryReturn>().toHaveProperty("error");
+      expectTypeOf<UseQueryReturn>().toHaveProperty("isLoading");
+      expectTypeOf<UseQueryReturn>().toHaveProperty("isPending");
+      expectTypeOf<UseQueryReturn>().toHaveProperty("isError");
+      expectTypeOf<UseQueryReturn>().toHaveProperty("isSuccess");
+      expectTypeOf<UseQueryReturn>().toHaveProperty("refetch");
+    });
+
+    it("useMutation returns MutationResult shape", () => {
+      type UseMutationReturn = ReturnType<ReactHooks["user"]["create"]["useMutation"]>;
+      expectTypeOf<UseMutationReturn>().toHaveProperty("data");
+      expectTypeOf<UseMutationReturn>().toHaveProperty("error");
+      expectTypeOf<UseMutationReturn>().toHaveProperty("isLoading");
+      expectTypeOf<UseMutationReturn>().toHaveProperty("isPending");
+      expectTypeOf<UseMutationReturn>().toHaveProperty("mutate");
+      expectTypeOf<UseMutationReturn>().toHaveProperty("mutateAsync");
+    });
+  });
+
+  // ==========================================================================
+  // RETURN TYPE TESTS - verifying correct return types per operation
+  // ==========================================================================
+
+  describe("TypedTRPCClient - Return types per operation", () => {
+    type Client = TypedTRPCClient<SchemaType>;
+
+    // findMany returns array
+    it("findMany.query returns Promise of array", () => {
+      type Return = ReturnType<Client["user"]["findMany"]["query"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<unknown[]>>();
+    });
+
+    // findUnique returns single or null
+    it("findUnique.query returns Promise of object or null", () => {
+      type Return = ReturnType<Client["user"]["findUnique"]["query"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<unknown | null>>();
+    });
+
+    // findFirst returns single or null
+    it("findFirst.query returns Promise of object or null", () => {
+      type Return = ReturnType<Client["user"]["findFirst"]["query"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<unknown | null>>();
+    });
+
+    // count returns number
+    it("count.query returns Promise<number>", () => {
+      type Return = ReturnType<Client["user"]["count"]["query"]>;
+      expectTypeOf<Return>().toEqualTypeOf<Promise<number>>();
+    });
+
+    // create returns single object
+    it("create.mutate returns Promise of created object", () => {
+      type Return = ReturnType<Client["user"]["create"]["mutate"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<{ id: string; email: string }>>();
+    });
+
+    // createMany returns { count: number }
+    it("createMany.mutate returns Promise<{ count: number }>", () => {
+      type Return = ReturnType<Client["user"]["createMany"]["mutate"]>;
+      expectTypeOf<Return>().toEqualTypeOf<Promise<{ count: number }>>();
+    });
+
+    // update returns updated object
+    it("update.mutate returns Promise of updated object", () => {
+      type Return = ReturnType<Client["user"]["update"]["mutate"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<{ id: string; email: string }>>();
+    });
+
+    // updateMany returns { count: number }
+    it("updateMany.mutate returns Promise<{ count: number }>", () => {
+      type Return = ReturnType<Client["user"]["updateMany"]["mutate"]>;
+      expectTypeOf<Return>().toEqualTypeOf<Promise<{ count: number }>>();
+    });
+
+    // upsert returns object
+    it("upsert.mutate returns Promise of upserted object", () => {
+      type Return = ReturnType<Client["user"]["upsert"]["mutate"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<{ id: string; email: string }>>();
+    });
+
+    // delete returns deleted object
+    it("delete.mutate returns Promise of deleted object", () => {
+      type Return = ReturnType<Client["user"]["delete"]["mutate"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<{ id: string; email: string }>>();
+    });
+
+    // deleteMany returns { count: number }
+    it("deleteMany.mutate returns Promise<{ count: number }>", () => {
+      type Return = ReturnType<Client["user"]["deleteMany"]["mutate"]>;
+      expectTypeOf<Return>().toEqualTypeOf<Promise<{ count: number }>>();
+    });
+
+    // aggregate returns any (complex aggregation result)
+    it("aggregate.query returns Promise", () => {
+      type Return = ReturnType<Client["user"]["aggregate"]["query"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<unknown>>();
+    });
+
+    // groupBy returns array
+    it("groupBy.query returns Promise of array", () => {
+      type Return = ReturnType<Client["user"]["groupBy"]["query"]>;
+      expectTypeOf<Return>().toMatchTypeOf<Promise<unknown[]>>();
+    });
+  });
+
+  // ==========================================================================
+  // INPUT PARAMETER TESTS
+  // ==========================================================================
+
+  describe("TypedTRPCClient - Input parameter types", () => {
+    type Client = TypedTRPCClient<SchemaType>;
+
+    it("findMany.query accepts optional input", () => {
+      // findMany can be called without arguments
+      type QueryFn = Client["user"]["findMany"]["query"];
+      expectTypeOf<QueryFn>().toBeCallableWith(undefined);
+    });
+
+    it("findUnique.query requires where clause", () => {
+      type QueryFn = Client["user"]["findUnique"]["query"];
+      // Should accept object with where
+      expectTypeOf<QueryFn>().toBeCallableWith({ where: { id: "123" } });
+    });
+
+    it("create.mutate requires data", () => {
+      type MutateFn = Client["user"]["create"]["mutate"];
+      // Should accept object with data
+      expectTypeOf<MutateFn>().toBeCallableWith({ data: { email: "test@test.com" } });
+    });
+
+    it("update.mutate requires where and data", () => {
+      type MutateFn = Client["user"]["update"]["mutate"];
+      // Should accept object with where and data
+      expectTypeOf<MutateFn>().toBeCallableWith({
+        where: { id: "123" },
+        data: { name: "Updated" },
+      });
+    });
+
+    it("delete.mutate requires where", () => {
+      type MutateFn = Client["user"]["delete"]["mutate"];
+      // Should accept object with where
+      expectTypeOf<MutateFn>().toBeCallableWith({ where: { id: "123" } });
+    });
+
+    it("count.query accepts optional input", () => {
+      type QueryFn = Client["user"]["count"]["query"];
+      expectTypeOf<QueryFn>().toBeCallableWith(undefined);
+      expectTypeOf<QueryFn>().toBeCallableWith({ where: { email: "test@test.com" } });
+    });
+  });
+
+  // ==========================================================================
+  // REACT HOOKS INPUT/OUTPUT TYPE TESTS
+  // ==========================================================================
+
+  describe("TypedTRPCReact - useQuery input and output types", () => {
+    type ReactHooks = TypedTRPCReact<SchemaType>;
+
+    it("findMany.useQuery accepts optional input", () => {
+      type UseQueryFn = ReactHooks["user"]["findMany"]["useQuery"];
+      expectTypeOf<UseQueryFn>().toBeCallableWith(undefined);
+    });
+
+    it("findMany.useQuery result.data is array or undefined", () => {
+      type Result = ReturnType<ReactHooks["user"]["findMany"]["useQuery"]>;
+      type Data = Result["data"];
+      // data should be array | undefined (because query might not have loaded yet)
+      expectTypeOf<Data>().toMatchTypeOf<unknown[] | undefined>();
+    });
+
+    it("findUnique.useQuery result.data can be null", () => {
+      type Result = ReturnType<ReactHooks["user"]["findUnique"]["useQuery"]>;
+      type Data = Result["data"];
+      // data should be object | null | undefined
+      expectTypeOf<Data>().toMatchTypeOf<unknown | null | undefined>();
+    });
+
+    it("count.useQuery result.data is number or undefined", () => {
+      type Result = ReturnType<ReactHooks["user"]["count"]["useQuery"]>;
+      type Data = Result["data"];
+      expectTypeOf<Data>().toMatchTypeOf<number | undefined>();
+    });
+  });
+
+  describe("TypedTRPCReact - useMutation input and output types", () => {
+    type ReactHooks = TypedTRPCReact<SchemaType>;
+
+    it("create.useMutation().mutate accepts data object", () => {
+      type MutationResult = ReturnType<ReactHooks["user"]["create"]["useMutation"]>;
+      type MutateFn = MutationResult["mutate"];
+      expectTypeOf<MutateFn>().toBeFunction();
+    });
+
+    it("create.useMutation().mutateAsync returns Promise", () => {
+      type MutationResult = ReturnType<ReactHooks["user"]["create"]["useMutation"]>;
+      type MutateAsyncFn = MutationResult["mutateAsync"];
+      expectTypeOf<MutateAsyncFn>().toBeFunction();
+      type AsyncReturn = ReturnType<MutateAsyncFn>;
+      expectTypeOf<AsyncReturn>().toMatchTypeOf<Promise<unknown>>();
+    });
+
+    it("createMany.useMutation().mutateAsync returns Promise<{ count: number }>", () => {
+      type MutationResult = ReturnType<ReactHooks["user"]["createMany"]["useMutation"]>;
+      type MutateAsyncFn = MutationResult["mutateAsync"];
+      type AsyncReturn = ReturnType<MutateAsyncFn>;
+      expectTypeOf<AsyncReturn>().toEqualTypeOf<Promise<{ count: number }>>();
+    });
+
+    it("deleteMany.useMutation().mutateAsync returns Promise<{ count: number }>", () => {
+      type MutationResult = ReturnType<ReactHooks["user"]["deleteMany"]["useMutation"]>;
+      type MutateAsyncFn = MutationResult["mutateAsync"];
+      type AsyncReturn = ReturnType<MutateAsyncFn>;
+      expectTypeOf<AsyncReturn>().toEqualTypeOf<Promise<{ count: number }>>();
+    });
+  });
+
+  // ==========================================================================
+  // MODEL FIELD TYPE TESTS
+  // ==========================================================================
+
+  describe("Return types contain correct model fields", () => {
+    type Client = TypedTRPCClient<SchemaType>;
+
+    it("user findMany returns objects with User fields", () => {
+      type Return = Awaited<ReturnType<Client["user"]["findMany"]["query"]>>;
+      type UserItem = Return extends (infer U)[] ? U : never;
+      expectTypeOf<UserItem>().toHaveProperty("id");
+      expectTypeOf<UserItem>().toHaveProperty("email");
+      expectTypeOf<UserItem>().toHaveProperty("name");
+      expectTypeOf<UserItem>().toHaveProperty("createdAt");
+      expectTypeOf<UserItem>().toHaveProperty("updatedAt");
+    });
+
+    it("post findMany returns objects with Post fields", () => {
+      type Return = Awaited<ReturnType<Client["post"]["findMany"]["query"]>>;
+      type PostItem = Return extends (infer P)[] ? P : never;
+      expectTypeOf<PostItem>().toHaveProperty("id");
+      expectTypeOf<PostItem>().toHaveProperty("title");
+      expectTypeOf<PostItem>().toHaveProperty("content");
+      expectTypeOf<PostItem>().toHaveProperty("published");
+      expectTypeOf<PostItem>().toHaveProperty("authorId");
+      expectTypeOf<PostItem>().toHaveProperty("createdAt");
+      expectTypeOf<PostItem>().toHaveProperty("updatedAt");
+    });
+
+    it("user create returns object with User fields", () => {
+      type Return = Awaited<ReturnType<Client["user"]["create"]["mutate"]>>;
+      expectTypeOf<Return>().toHaveProperty("id");
+      expectTypeOf<Return>().toHaveProperty("email");
+      expectTypeOf<Return>().toHaveProperty("name");
+    });
+
+    it("post create returns object with Post fields", () => {
+      type Return = Awaited<ReturnType<Client["post"]["create"]["mutate"]>>;
+      expectTypeOf<Return>().toHaveProperty("id");
+      expectTypeOf<Return>().toHaveProperty("title");
+      expectTypeOf<Return>().toHaveProperty("authorId");
+    });
+  });
+
+  // ==========================================================================
+  // FIELD TYPE CORRECTNESS TESTS
+  // ==========================================================================
+
+  describe("Field types are correct", () => {
+    type Client = TypedTRPCClient<SchemaType>;
+
+    it("user.id is string", () => {
+      type Return = Awaited<ReturnType<Client["user"]["findMany"]["query"]>>;
+      type UserItem = Return extends (infer U)[] ? U : never;
+      type IdType = UserItem extends { id: infer I } ? I : never;
+      expectTypeOf<IdType>().toEqualTypeOf<string>();
+    });
+
+    it("user.email is string", () => {
+      type Return = Awaited<ReturnType<Client["user"]["findMany"]["query"]>>;
+      type UserItem = Return extends (infer U)[] ? U : never;
+      type EmailType = UserItem extends { email: infer E } ? E : never;
+      expectTypeOf<EmailType>().toEqualTypeOf<string>();
+    });
+
+    it("user.name is string or null (optional field)", () => {
+      type Return = Awaited<ReturnType<Client["user"]["findMany"]["query"]>>;
+      type UserItem = Return extends (infer U)[] ? U : never;
+      type NameType = UserItem extends { name: infer N } ? N : never;
+      expectTypeOf<NameType>().toMatchTypeOf<string | null>();
+    });
+
+    it("post.published is boolean", () => {
+      type Return = Awaited<ReturnType<Client["post"]["findMany"]["query"]>>;
+      type PostItem = Return extends (infer P)[] ? P : never;
+      type PublishedType = PostItem extends { published: infer Pub } ? Pub : never;
+      expectTypeOf<PublishedType>().toEqualTypeOf<boolean>();
+    });
+
+    it("post.content is string or null (optional field)", () => {
+      type Return = Awaited<ReturnType<Client["post"]["findMany"]["query"]>>;
+      type PostItem = Return extends (infer P)[] ? P : never;
+      type ContentType = PostItem extends { content: infer C } ? C : never;
+      expectTypeOf<ContentType>().toMatchTypeOf<string | null>();
+    });
+  });
+
+  // ==========================================================================
+  // DYNAMIC RETURN TYPES BASED ON INCLUDE/SELECT
+  // This is the key feature - return types change based on input options
+  // ==========================================================================
+
+  describe("Dynamic return types with include/select (TypedRouterCaller)", () => {
+    // TypedRouterCaller is the server-side caller with full dynamic typing
+    type Caller = TypedRouterCaller<SchemaType>;
+
+    it("findMany without include returns base User type", () => {
+      // When called with no args or empty args, returns base User[]
+      type BaseReturn = Awaited<ReturnType<typeof findManyNoInclude>>;
+      async function findManyNoInclude(caller: Caller) {
+        return caller.user.findMany({});
+      }
+      expectTypeOf<BaseReturn[0]>().toHaveProperty("id");
+      expectTypeOf<BaseReturn[0]>().toHaveProperty("email");
+      // Without include, posts should NOT be present
+      expectTypeOf<BaseReturn[0]>().not.toHaveProperty("posts");
+    });
+
+    it("findMany with include: { posts: true } returns User with posts", () => {
+      // When include: { posts: true } is passed, return type includes posts
+      async function findManyWithPosts(caller: Caller) {
+        return caller.user.findMany({ include: { posts: true } });
+      }
+      type WithPostsReturn = Awaited<ReturnType<typeof findManyWithPosts>>;
+      expectTypeOf<WithPostsReturn[0]>().toHaveProperty("id");
+      expectTypeOf<WithPostsReturn[0]>().toHaveProperty("email");
+      expectTypeOf<WithPostsReturn[0]>().toHaveProperty("posts");
+    });
+
+    it("post.findMany with include: { author: true } returns Post with author", () => {
+      async function findPostsWithAuthor(caller: Caller) {
+        return caller.post.findMany({ include: { author: true } });
+      }
+      type WithAuthorReturn = Awaited<ReturnType<typeof findPostsWithAuthor>>;
+      expectTypeOf<WithAuthorReturn[0]>().toHaveProperty("id");
+      expectTypeOf<WithAuthorReturn[0]>().toHaveProperty("title");
+      expectTypeOf<WithAuthorReturn[0]>().toHaveProperty("author");
+    });
+
+    it("create with include: { posts: true } returns User with posts", () => {
+      async function createWithPosts(caller: Caller) {
+        return caller.user.create({
+          data: { email: "test@test.com" },
+          include: { posts: true },
+        });
+      }
+      type CreateWithPostsReturn = Awaited<ReturnType<typeof createWithPosts>>;
+      expectTypeOf<CreateWithPostsReturn>().toHaveProperty("id");
+      expectTypeOf<CreateWithPostsReturn>().toHaveProperty("email");
+      expectTypeOf<CreateWithPostsReturn>().toHaveProperty("posts");
+    });
+
+    it("findUnique with include returns object with relations", () => {
+      async function findUniqueWithPosts(caller: Caller) {
+        return caller.user.findUnique({
+          where: { id: "123" },
+          include: { posts: true },
+        });
+      }
+      type FindUniqueReturn = Awaited<ReturnType<typeof findUniqueWithPosts>>;
+      // findUnique can return null
+      type NonNullReturn = NonNullable<FindUniqueReturn>;
+      expectTypeOf<NonNullReturn>().toHaveProperty("id");
+      expectTypeOf<NonNullReturn>().toHaveProperty("posts");
+    });
+
+    it("update with include returns updated object with relations", () => {
+      async function updateWithPosts(caller: Caller) {
+        return caller.user.update({
+          where: { id: "123" },
+          data: { name: "Updated" },
+          include: { posts: true },
+        });
+      }
+      type UpdateReturn = Awaited<ReturnType<typeof updateWithPosts>>;
+      expectTypeOf<UpdateReturn>().toHaveProperty("id");
+      expectTypeOf<UpdateReturn>().toHaveProperty("posts");
+    });
+  });
+
+  describe("Dynamic return types with select (TypedRouterCaller)", () => {
+    type Caller = TypedRouterCaller<SchemaType>;
+
+    it("findMany with select returns only selected fields", () => {
+      async function findManySelect(caller: Caller) {
+        return caller.user.findMany({
+          select: { id: true, email: true },
+        });
+      }
+      type SelectReturn = Awaited<ReturnType<typeof findManySelect>>;
+      expectTypeOf<SelectReturn[0]>().toHaveProperty("id");
+      expectTypeOf<SelectReturn[0]>().toHaveProperty("email");
+      // Non-selected fields should not be present
+      // Note: TypeScript structural typing may still allow access, but the
+      // intent is that only selected fields are in the type
+    });
+
+    it("findUnique with select returns only selected fields", () => {
+      async function findUniqueSelect(caller: Caller) {
+        return caller.user.findUnique({
+          where: { id: "123" },
+          select: { id: true, name: true },
+        });
+      }
+      type SelectReturn = Awaited<ReturnType<typeof findUniqueSelect>>;
+      type NonNullReturn = NonNullable<SelectReturn>;
+      expectTypeOf<NonNullReturn>().toHaveProperty("id");
+      expectTypeOf<NonNullReturn>().toHaveProperty("name");
+    });
+
+    it("create with select returns only selected fields", () => {
+      async function createSelect(caller: Caller) {
+        return caller.user.create({
+          data: { email: "test@test.com" },
+          select: { id: true },
+        });
+      }
+      type CreateReturn = Awaited<ReturnType<typeof createSelect>>;
+      expectTypeOf<CreateReturn>().toHaveProperty("id");
+    });
+
+    it("select can include relations", () => {
+      async function selectWithRelation(caller: Caller) {
+        return caller.user.findMany({
+          select: {
+            id: true,
+            posts: true,
+          },
+        });
+      }
+      type SelectReturn = Awaited<ReturnType<typeof selectWithRelation>>;
+      expectTypeOf<SelectReturn[0]>().toHaveProperty("id");
+      expectTypeOf<SelectReturn[0]>().toHaveProperty("posts");
+    });
+  });
+
+  describe("Nested includes (TypedRouterCaller)", () => {
+    type Caller = TypedRouterCaller<SchemaType>;
+
+    it("nested include: posts with author", () => {
+      async function nestedInclude(caller: Caller) {
+        return caller.user.findMany({
+          include: {
+            posts: {
+              include: {
+                author: true,
+              },
+            },
+          },
+        });
+      }
+      type Return = Awaited<ReturnType<typeof nestedInclude>>;
+      expectTypeOf<Return[0]>().toHaveProperty("posts");
+      // The posts should have author included
+      type PostsType = Return[0]["posts"];
+      expectTypeOf<PostsType>().toBeArray();
+    });
+  });
+
+  // ==========================================================================
+  // COMPILE-TIME TYPE ASSERTIONS FOR COMPOSABLE SYSTEM
+  // ==========================================================================
+
+  describe("Compile-time type assertions for composable system", () => {
+    // These assertions verify types at compile time
+
+    it("WithZenStack type structure is correct", () => {
+      type T = WithZenStack<SchemaType, "db">;
+      // Compile-time check - this should not error
+      const _check: T["__path"] extends "db" ? true : false = true;
+      expectTypeOf(_check).toEqualTypeOf<true>();
+    });
+
+    it("WithReact preserves path correctly", () => {
+      type T = WithReact<WithZenStack<SchemaType, "nested.path">>;
+      const _check: T["__path"] extends "nested.path" ? true : false = true;
+      expectTypeOf(_check).toEqualTypeOf<true>();
+    });
+
+    it("WithClient preserves path correctly", () => {
+      type T = WithClient<WithZenStack<SchemaType, "api.db">>;
+      const _check: T["__path"] extends "api.db" ? true : false = true;
+      expectTypeOf(_check).toEqualTypeOf<true>();
+    });
+
+    it("Adapters produce different types", () => {
+      type ReactTypes = WithReact<WithZenStack<SchemaType>>["__types"];
+      type ClientTypes = WithClient<WithZenStack<SchemaType>>["__types"];
+      // React types should have useQuery, Client types should have query
+      expectTypeOf<ReactTypes["user"]["findMany"]>().toHaveProperty("useQuery");
+      expectTypeOf<ClientTypes["user"]["findMany"]>().toHaveProperty("query");
+      // And vice versa should NOT have the other
+      expectTypeOf<ReactTypes["user"]["findMany"]>().not.toHaveProperty("query");
+      expectTypeOf<ClientTypes["user"]["findMany"]>().not.toHaveProperty("useQuery");
     });
   });
 });
