@@ -178,7 +178,8 @@ function createModelProcedures<Schema extends SchemaDef>(
           message: `Operation ${op} not found on model ${modelName}`,
         });
       }
-      return model[op](input);
+      const result = await model[op](input);
+      return result;
     };
 
     if (isQuery) {
