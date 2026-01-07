@@ -1,9 +1,10 @@
 import { describe, it, expectTypeOf } from "vitest";
-import { initTRPC } from "@trpc/server";
+import { initTRPC, type AnyRouter } from "@trpc/server";
 import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import {
   createZenStackRouter,
   type TypedRouterCaller,
+  type ZenStackRouter,
 } from "../src/index.js";
 
 /**
@@ -277,6 +278,18 @@ describe("Type Tests", () => {
       const router = createZenStackRouter(schema, t);
 
       expectTypeOf(router).toHaveProperty("createCaller");
+    });
+
+    it("ZenStackRouter should be assignable to AnyRouter", () => {
+      // This test verifies that ZenStackRouter can be used where AnyRouter is expected
+      // which allows merging without explicit casts
+      type TestRouter = ZenStackRouter<SchemaType>;
+
+      // The router should have _def with router: true
+      expectTypeOf<TestRouter["_def"]["router"]>().toEqualTypeOf<true>();
+
+      // The router should have createCaller
+      expectTypeOf<TestRouter>().toHaveProperty("createCaller");
     });
   });
 });

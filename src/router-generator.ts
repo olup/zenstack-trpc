@@ -255,9 +255,9 @@ export function createZenStackRouter<
 
 /**
  * Type for a query procedure with proper input/output typing
- * Matches tRPC's internal Procedure interface for type inference
+ * Matches tRPC's internal Procedure interface for type inference and AnyProcedure compatibility
  */
-type TypedQueryProcedure<TInput, TOutput> = {
+interface TypedQueryProcedure<TInput, TOutput> {
   _def: {
     $types: {
       input: TInput;
@@ -267,17 +267,17 @@ type TypedQueryProcedure<TInput, TOutput> = {
     type: 'query';
     meta: unknown;
     experimental_caller: boolean;
-    inputs: any[];
+    inputs: unknown[];
   };
   meta: unknown;
   (opts: unknown): Promise<TOutput>;
-};
+}
 
 /**
  * Type for a mutation procedure with proper input/output typing
- * Matches tRPC's internal Procedure interface for type inference
+ * Matches tRPC's internal Procedure interface for type inference and AnyProcedure compatibility
  */
-type TypedMutationProcedure<TInput, TOutput> = {
+interface TypedMutationProcedure<TInput, TOutput> {
   _def: {
     $types: {
       input: TInput;
@@ -287,11 +287,11 @@ type TypedMutationProcedure<TInput, TOutput> = {
     type: 'mutation';
     meta: unknown;
     experimental_caller: boolean;
-    inputs: any[];
+    inputs: unknown[];
   };
   meta: unknown;
   (opts: unknown): Promise<TOutput>;
-};
+}
 
 /**
  * Type for a single model's tRPC procedures (for client inference)
@@ -357,15 +357,16 @@ type TRPCModelProcedures<
 };
 
 /**
- * Type for the full router record that tRPC uses for inference
- * @internal
+ * Type for the full router record that tRPC uses for inference.
+ * Use this type when nesting the ZenStack router within another router.
  */
-type ZenStackRouterRecord<Schema extends SchemaDef> = {
+export type ZenStackRouterRecord<Schema extends SchemaDef> = {
   [K in GetModels<Schema> as Uncapitalize<K>]: TRPCModelProcedures<Schema, K>;
 };
 
 /**
- * The typed router type that clients can use for proper inference
+ * The typed router type that clients can use for proper inference.
+ * Compatible with tRPC's AnyRouter for use in merged routers.
  */
 export type ZenStackRouter<Schema extends SchemaDef, TContext = any> = {
   _def: {
@@ -385,7 +386,7 @@ export type ZenStackRouter<Schema extends SchemaDef, TContext = any> = {
     record: ZenStackRouterRecord<Schema>;
     router: true;
     procedures: ZenStackRouterRecord<Schema>;
-    lazy: {};
+    lazy: Record<string, unknown>;
   };
   createCaller: (ctx: TContext) => TypedRouterCaller<Schema>;
 } & ZenStackRouterRecord<Schema>;

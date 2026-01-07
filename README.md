@@ -146,6 +146,25 @@ const usersWithPosts = await caller.user.findMany({ include: { posts: true } });
 // Type: (User & { posts: Post[] })[]
 ```
 
+### `ZenStackRouter<Schema>` and `ZenStackRouterRecord<Schema>`
+
+Type helpers for the generated router structure:
+
+- **`ZenStackRouter<Schema>`** - The full router type including `_def` and `createCaller`
+- **`ZenStackRouterRecord<Schema>`** - Just the procedure map (useful for type composition)
+
+```typescript
+import type { ZenStackRouter, ZenStackRouterRecord } from "zenstack-trpc";
+import type { SchemaType } from "./zenstack/schema.js";
+
+// The full router type
+type MyRouter = ZenStackRouter<SchemaType>;
+
+// Just the procedures (for advanced type manipulation)
+type Procedures = ZenStackRouterRecord<SchemaType>;
+// { user: { findMany: ..., create: ..., ... }, post: { ... }, ... }
+```
+
 ### Composable Type System
 
 The library provides a composable type system for adding full `include`/`select` type inference to tRPC clients. This solves tRPC's limitation where generic type information is lost during type inference.
@@ -196,19 +215,38 @@ const usersWithPosts = await client.user.findMany.query({
 
 ### Nested Namespaces (Merged Routers)
 
-When your ZenStack router is merged under a namespace, include the path in `WithZenStack`:
+When merging the ZenStack router with other routers, you need to cast it to `AnyRouter` for tRPC compatibility:
 
 ```typescript
-// If your router structure is:
-// appRouter = t.router({
-//   generated: zenStackRouter,  // ZenStack models under 'generated' namespace
-//   auth: authRouter,
-// })
+import { initTRPC } from "@trpc/server";
+import type { AnyRouter } from "@trpc/server";
+import { createZenStackRouter } from "zenstack-trpc";
+import { schema } from "./zenstack/schema.js";
 
+const t = initTRPC.context<{ db: any }>().create();
+
+// Create the ZenStack router and cast for tRPC compatibility
+const generatedRouter = createZenStackRouter(schema, t) as unknown as AnyRouter;
+
+// Merge with other routers
+export const appRouter = t.router({
+  admin: adminRouter,
+  auth: authRouter,
+  generated: generatedRouter,
+});
+```
+
+On the client side, include the path in `WithZenStack` to get full type inference:
+
+```typescript
+import { createTRPCReact } from "@trpc/react-query";
 import { typedClient, type WithZenStack, type WithReact } from "zenstack-trpc";
+import type { AppRouter } from "./server/trpc.js";
+import type { SchemaType } from "./zenstack/schema.js";
 
 // Single level nesting:
 type Typed = WithReact<WithZenStack<SchemaType, "generated">>;
+const _trpc = createTRPCReact<AppRouter>();
 export const trpc = typedClient<Typed>()(_trpc);
 
 // Multi-level nesting (dot notation):
