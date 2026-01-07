@@ -75,16 +75,18 @@ export function createWhereSchema<Schema extends SchemaDef>(
       // For relations, allow nested where clauses
       shape[fieldName] = z.any().optional();
     } else {
-      // For scalar fields, allow direct value or filter object
+      // For scalar fields, allow direct value, null, or filter object
       const fieldType = fieldDef.type as string;
       const baseType = getZodTypeForField(fieldType, false, false);
+      const nullableBaseType = baseType.nullable();
 
       shape[fieldName] = z
         .union([
           baseType,
+          z.null(),
           z.object({
-            equals: baseType.optional(),
-            not: baseType.optional(),
+            equals: nullableBaseType.optional(),
+            not: nullableBaseType.optional(),
             in: z.array(baseType).optional(),
             notIn: z.array(baseType).optional(),
             lt: baseType.optional(),

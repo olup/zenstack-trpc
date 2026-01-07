@@ -214,25 +214,42 @@ export type TypedTRPCReact<S extends SchemaDef> = {
 // Type Converter Utilities
 // =============================================================================
 
+/** Detect if client is React-based */
+type IsReactClient<T> = T extends { useQuery: any } | { useMutation: any } ? true : false;
+
+/** Get the appropriate types based on client type */
+type InferClientTypes<S extends SchemaDef, T> =
+  IsReactClient<T> extends true ? TypedTRPCReact<S> : TypedTRPCClient<S>;
+
+/** Result type with optional path application */
+type WithZenStackResult<S extends SchemaDef, T, TPath extends string | undefined> =
+  TPath extends string
+    ? ApplyAtPath<T, TPath, InferClientTypes<S, T>>
+    : InferClientTypes<S, T>;
+
 /**
  * Converts a tRPC client or React hooks instance to a fully typed version
  * with include/select inference. This is a type-only transformation.
  *
+ * Supports optional path parameter for nested namespaces with dot notation.
+ *
  * @example
  * ```typescript
- * // For vanilla tRPC client:
+ * // For vanilla tRPC client (root level):
  * const client = withZenStackTypes<SchemaType>()(createTRPCClient<AppRouter>({ links: [...] }));
  *
- * // For tRPC React hooks:
+ * // For tRPC React hooks (root level):
  * const trpc = withZenStackTypes<SchemaType>()(createTRPCReact<AppRouter>());
+ *
+ * // With nested namespace (single level):
+ * const trpc = withZenStackTypes<SchemaType>('db')(createTRPCReact<AppRouter>());
+ *
+ * // With nested namespace (multi-level):
+ * const trpc = withZenStackTypes<SchemaType>('api.db')(createTRPCReact<AppRouter>());
  * ```
  */
-export function withZenStackTypes<S extends SchemaDef>() {
-  return <T>(client: T): T extends { useQuery: any } | { useMutation: any }
-    ? TypedTRPCReact<S>
-    : T extends { query: any } | { mutate: any }
-    ? TypedTRPCClient<S>
-    : TypedTRPCClient<S> & TypedTRPCReact<S> => {
+export function withZenStackTypes<S extends SchemaDef, TPath extends string | undefined = undefined>(_path?: TPath) {
+  return <T>(client: T): WithZenStackResult<S, T, TPath> => {
     return client as any;
   };
 }
@@ -249,26 +266,51 @@ export function withZenStackTypes<S extends SchemaDef>() {
 export type WithZenStackTypes<S extends SchemaDef, Mode extends 'client' | 'react' = 'react'> =
   Mode extends 'react' ? TypedTRPCReact<S> : TypedTRPCClient<S>;
 
+// =============================================================================
+// Deep Nesting Type Utilities
+// =============================================================================
+
+/** Split a dot-separated path into head and tail */
+type SplitPath<P extends string> = P extends `${infer Head}.${infer Tail}` ? [Head, Tail] : [P, never];
+
+/** Recursively apply types at a nested path */
+type ApplyAtPath<TClient, Path extends string, TTypes> =
+  SplitPath<Path> extends [infer Head extends string, infer Tail]
+    ? Tail extends never
+      ? Omit<TClient, Head> & { [K in Head]: TTypes }
+      : Omit<TClient, Head> & { [K in Head]: Head extends keyof TClient ? ApplyAtPath<TClient[Head], Tail & string, TTypes> : TTypes }
+    : TClient;
+
 /**
  * Helper function to type a nested namespace within your tRPC React hooks.
+ * Supports dot-notation for deep nesting.
  *
  * @example
  * ```typescript
+ * // Single level nesting
  * export const trpc = withNestedZenStackReact<SchemaType, typeof _trpc, 'db'>('db')(_trpc);
+ *
+ * // Multi-level nesting
+ * export const trpc = withNestedZenStackReact<SchemaType, typeof _trpc, 'api.db'>('api.db')(_trpc);
  * ```
  */
-export function withNestedZenStackReact<S extends SchemaDef, TClient, TKey extends string>(_namespace: TKey) {
-  return (client: TClient): Omit<TClient, TKey> & { [K in TKey]: TypedTRPCReact<S> } => client as any;
+export function withNestedZenStackReact<S extends SchemaDef, TClient, TPath extends string>(_path: TPath) {
+  return (client: TClient): ApplyAtPath<TClient, TPath, TypedTRPCReact<S>> => client as any;
 }
 
 /**
  * Helper function to type a nested namespace within your vanilla tRPC client.
+ * Supports dot-notation for deep nesting.
  *
  * @example
  * ```typescript
+ * // Single level nesting
  * export const client = withNestedZenStackClient<SchemaType, typeof _client, 'db'>('db')(_client);
+ *
+ * // Multi-level nesting
+ * export const client = withNestedZenStackClient<SchemaType, typeof _client, 'api.db'>('api.db')(_client);
  * ```
  */
-export function withNestedZenStackClient<S extends SchemaDef, TClient, TKey extends string>(_namespace: TKey) {
-  return (client: TClient): Omit<TClient, TKey> & { [K in TKey]: TypedTRPCClient<S> } => client as any;
+export function withNestedZenStackClient<S extends SchemaDef, TClient, TPath extends string>(_path: TPath) {
+  return (client: TClient): ApplyAtPath<TClient, TPath, TypedTRPCClient<S>> => client as any;
 }

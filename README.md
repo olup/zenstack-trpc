@@ -195,7 +195,7 @@ const trpc = _trpc as unknown as TypedTRPCReact<SchemaType>;
 
 ### Nested Namespaces (Merged Routers)
 
-When your ZenStack router is merged under a namespace in your main router, use `WithZenStackTypes` or `withNestedZenStackTypes()`:
+When your ZenStack router is merged under a namespace in your main router, pass the namespace path to `withZenStackTypes()`:
 
 ```typescript
 // If your router structure is:
@@ -207,28 +207,30 @@ When your ZenStack router is merged under a namespace in your main router, use `
 import { createTRPCReact } from "@trpc/react-query";
 import type { AppRouter } from "./server/trpc.js";
 import type { SchemaType } from "./zenstack/schema.js";
-import type { WithZenStackTypes } from "zenstack-trpc";
+import { withZenStackTypes } from "zenstack-trpc";
 
 const _trpc = createTRPCReact<AppRouter>();
 
-// Option 1: Type helper for manual casting
-type TypedTRPC = Omit<typeof _trpc, 'db'> & {
-  db: WithZenStackTypes<SchemaType, 'react'>
-};
-export const trpc = _trpc as unknown as TypedTRPC;
+// Single level nesting:
+export const trpc = withZenStackTypes<SchemaType>('db')(_trpc);
 
-// Option 2: Use the helper functions
-import { withNestedZenStackReact, withNestedZenStackClient } from "zenstack-trpc";
-
-// For React hooks:
-export const trpc = withNestedZenStackReact<SchemaType, typeof _trpc, 'db'>('db')(_trpc);
-
-// For vanilla tRPC client:
-// export const client = withNestedZenStackClient<SchemaType, typeof _client, 'db'>('db')(_client);
+// Multi-level nesting (dot notation):
+// export const trpc = withZenStackTypes<SchemaType>('api.db')(_trpc);
 
 // Now you can use:
 // trpc.db.user.findMany.useQuery({ include: { posts: true } }) // fully typed
 // trpc.auth.login.useMutation() // other routers unaffected
+```
+
+For manual type casting, you can also use `WithZenStackTypes`:
+
+```typescript
+import type { WithZenStackTypes } from "zenstack-trpc";
+
+type TypedTRPC = Omit<typeof _trpc, 'db'> & {
+  db: WithZenStackTypes<SchemaType, 'react'>
+};
+export const trpc = _trpc as unknown as TypedTRPC;
 ```
 
 ### Zod Schema Access
