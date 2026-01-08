@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
+      id-token: write # Indispensable pour l'OIDC
 
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +23,8 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+          # IMPORTANT: On ne met PAS de registry-url ici. 
+          # Cela évite que npm ne cherche un secret NPM_TOKEN.
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -40,4 +41,6 @@ jobs:
           generate_release_notes: true
 
       - name: Publish to npm
+        # On utilise npm directement. L'absence de NODE_AUTH_TOKEN 
+        # forcera npm à utiliser le jeton OIDC de GitHub.
         run: npm publish --provenance --access public
