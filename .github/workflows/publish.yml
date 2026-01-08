@@ -41,6 +41,7 @@ jobs:
           generate_release_notes: true
 
       - name: Publish to npm
-        # On utilise npm directement. L'absence de NODE_AUTH_TOKEN 
-        # forcera npm à utiliser le jeton OIDC de GitHub.
-        run: npm publish --provenance --access public
+        run: |
+          # On supprime le fichier .npmrc généré qui peut contenir des configs de token invalides
+          rm -f .npmrc
+          npm publish --provenance --access public
