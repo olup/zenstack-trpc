@@ -223,9 +223,32 @@ export function createUniqueWhereSchema<Schema extends SchemaDef>(
   }
 
   const uniqueFields = model.uniqueFields as Record<string, any>;
+  const fields = model.fields as Record<string, any>;
   const shape: Record<string, z.ZodTypeAny> = {};
 
   for (const [fieldName, fieldDef] of Object.entries(uniqueFields)) {
+    const compoundFields = Array.isArray((fieldDef as any).fields)
+      ? ((fieldDef as any).fields as string[])
+      : null;
+
+    if (compoundFields) {
+      const compoundShape: Record<string, z.ZodTypeAny> = {};
+      for (const compoundField of compoundFields) {
+        const fieldInfo = fields[compoundField];
+        if (fieldInfo) {
+          compoundShape[compoundField] = getZodTypeForField(
+            fieldInfo.type as string,
+            false,
+            fieldInfo.array === true
+          );
+        } else {
+          compoundShape[compoundField] = z.any();
+        }
+      }
+      shape[fieldName] = z.object(compoundShape).passthrough().optional();
+      continue;
+    }
+
     const fieldType = (fieldDef as any).type as string;
     shape[fieldName] = getZodTypeForField(fieldType, true, false);
   }
@@ -365,8 +388,7 @@ export function createModelSchemas<Schema extends SchemaDef>(
         data: z.union([createDataSchema, z.array(createDataSchema)]),
         skipDuplicates: z.boolean().optional(),
       })
-      .passthrough()
-      .optional(),
+      .passthrough(),
 
     update: z.object({
       where: uniqueWhereSchema,
