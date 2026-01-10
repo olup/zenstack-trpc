@@ -14,7 +14,7 @@ export function createTestDb() {
     fs.unlinkSync(TEST_DB_PATH);
   }
 
-  const db = ZenStackClient(schema, {
+  const db = new ZenStackClient(schema, {
     dialect: new SqliteDialect({
       database: new SQLite(TEST_DB_PATH),
     }),

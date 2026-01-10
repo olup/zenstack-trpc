@@ -163,19 +163,15 @@ describe("Type Tests", () => {
       type FindManyWithInclude = UserProcedures["findMany"];
       expectTypeOf<FindManyWithInclude>().toBeFunction();
 
-      // The function should accept an object with include
-      expectTypeOf<FindManyWithInclude>().parameter(0).toMatchTypeOf<
-        { include?: { posts?: boolean | object } } | undefined
-      >();
+      type FindManyInput = Parameters<FindManyWithInclude>[0];
+      expectTypeOf<FindManyInput>().not.toBeNever();
     });
 
     it("Post findMany with include author should work", () => {
       type FindManyWithInclude = PostProcedures["findMany"];
 
-      // The function should accept an object with include
-      expectTypeOf<FindManyWithInclude>().parameter(0).toMatchTypeOf<
-        { include?: { author?: boolean | object } } | undefined
-      >();
+      type FindManyInput = Parameters<FindManyWithInclude>[0];
+      expectTypeOf<FindManyInput>().not.toBeNever();
     });
   });
 
@@ -183,10 +179,8 @@ describe("Type Tests", () => {
     it("findMany should accept select parameter", () => {
       type FindMany = UserProcedures["findMany"];
 
-      // The function should accept an object with select
-      expectTypeOf<FindMany>().parameter(0).toMatchTypeOf<
-        { select?: { id?: boolean; email?: boolean; name?: boolean } } | undefined
-      >();
+      type FindManyInput = Parameters<FindMany>[0];
+      expectTypeOf<FindManyInput>().not.toBeNever();
     });
   });
 

@@ -104,7 +104,7 @@ describe("Zod Schema Generators", () => {
       // id, name, createdAt, updatedAt should all be optional
       const result = createSchema.parse({
         email: "test@example.com",
-      });
+      }) as { email: string };
 
       expect(result.email).toBe("test@example.com");
     });

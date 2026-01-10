@@ -24,22 +24,7 @@
  */
 
 import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
-import type {
-  FindManyArgs,
-  FindUniqueArgs,
-  FindFirstArgs,
-  CreateArgs,
-  CreateManyArgs,
-  UpdateArgs,
-  UpdateManyArgs,
-  UpsertArgs,
-  DeleteArgs,
-  DeleteManyArgs,
-  CountArgs,
-  AggregateArgs,
-  GroupByArgs,
-  SimplifiedPlainResult,
-} from "@zenstackhq/orm";
+import type { SimplifiedPlainResult } from "@zenstackhq/orm";
 import type {
   UseQueryResult,
   UseMutationResult,
@@ -47,6 +32,15 @@ import type {
   UseQueryOptions,
 } from "@tanstack/react-query";
 import type { TRPCClientErrorLike } from "@trpc/client";
+import type {
+  OperationArgs,
+  ArrayOps,
+  CountResultOps,
+  NumberResultOps,
+  AnyResultOps,
+  NullableOps,
+  MutationOps,
+} from "./operations.js";
 
 /** Convert model names to lowercase (internal utility, also used by router-generator) */
 export type Uncapitalize<S extends string> = S extends `${infer F}${infer R}` ? `${Lowercase<F>}${R}` : S;
@@ -59,45 +53,6 @@ type Result<S extends SchemaDef, M extends GetModels<S>, T, D, Arr extends boole
 
 /** Default result type for a model */
 type DefaultResult<S extends SchemaDef, M extends GetModels<S>> = SimplifiedPlainResult<S, M, {}>;
-
-// =============================================================================
-// Operation type mappings - single source of truth
-// =============================================================================
-
-/** Maps operation names to their ZenStack Args types */
-type OperationArgs<S extends SchemaDef, M extends GetModels<S>> = {
-  findMany: FindManyArgs<S, M>;
-  findUnique: FindUniqueArgs<S, M>;
-  findFirst: FindFirstArgs<S, M>;
-  create: CreateArgs<S, M>;
-  createMany: CreateManyArgs<S, M>;
-  update: UpdateArgs<S, M>;
-  updateMany: UpdateManyArgs<S, M>;
-  upsert: UpsertArgs<S, M>;
-  delete: DeleteArgs<S, M>;
-  deleteMany: DeleteManyArgs<S, M>;
-  count: CountArgs<S, M>;
-  aggregate: AggregateArgs<S, M>;
-  groupBy: GroupByArgs<S, M>;
-};
-
-/** Operations that return arrays */
-type ArrayOps = 'findMany' | 'groupBy';
-
-/** Operations that return { count: number } */
-type CountResultOps = 'createMany' | 'updateMany' | 'deleteMany';
-
-/** Operations that return number */
-type NumberResultOps = 'count';
-
-/** Operations that return any */
-type AnyResultOps = 'aggregate';
-
-/** Operations that return nullable results */
-type NullableOps = 'findUnique' | 'findFirst';
-
-/** Mutations (vs queries) */
-type MutationOps = 'create' | 'createMany' | 'update' | 'updateMany' | 'upsert' | 'delete' | 'deleteMany';
 
 // =============================================================================
 // Vanilla tRPC Client Types

@@ -1,122 +1,109 @@
 import { TRPCError } from "@trpc/server";
-import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
 import type {
-  FindManyArgs,
-  FindUniqueArgs,
-  FindFirstArgs,
-  CreateArgs,
-  CreateManyArgs,
-  UpdateArgs,
-  UpdateManyArgs,
-  UpsertArgs,
-  DeleteArgs,
-  DeleteManyArgs,
-  CountArgs,
-  AggregateArgs,
-  GroupByArgs,
-  SimplifiedPlainResult,
-} from "@zenstackhq/orm";
+  AnyRouter,
+  TRPCQueryProcedure,
+  TRPCMutationProcedure,
+} from "@trpc/server";
+import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
+import type { SimplifiedPlainResult } from "@zenstackhq/orm";
 import { z } from "zod";
 import { createModelSchemas } from "./zod-schemas.js";
 import type { Uncapitalize } from "./typed-client.js";
+import type {
+  OperationArgs,
+  CountResultOps,
+  NumberResultOps,
+  AnyResultOps,
+  MutationOps,
+} from "./operations.js";
 
 /**
  * Type for a single model's procedures - provides FULL dynamic input AND output typing
  *
  * When you pass `include` or `select`, the return type automatically includes those fields!
  */
-export interface TypedModelProcedures<
+type DefaultResult<
   Schema extends SchemaDef,
   Model extends GetModels<Schema>
-> {
-  /**
-   * Find multiple records
-   * @example
-   * // Returns User[] with posts included
-   * const users = await caller.user.findMany({ include: { posts: true } });
-   */
-  findMany<T extends FindManyArgs<Schema, Model>>(
-    input?: T
-  ): Promise<SimplifiedPlainResult<Schema, Model, T>[]>;
+> = SimplifiedPlainResult<Schema, Model, {}>;
 
-  /**
-   * Find a unique record by ID or unique field
-   */
-  findUnique<T extends FindUniqueArgs<Schema, Model>>(
-    input: T
-  ): Promise<SimplifiedPlainResult<Schema, Model, T> | null>;
+type CallerResultForOp<
+  Schema extends SchemaDef,
+  Model extends GetModels<Schema>,
+  Op extends keyof OperationArgs<Schema, Model>,
+  Args
+> =
+  Op extends "findMany"
+    ? SimplifiedPlainResult<Schema, Model, Args>[]
+    : Op extends "findUnique" | "findFirst"
+      ? SimplifiedPlainResult<Schema, Model, Args> | null
+      : Op extends CountResultOps
+        ? { count: number }
+        : Op extends NumberResultOps
+          ? number
+          : Op extends AnyResultOps
+            ? any
+            : Op extends "groupBy"
+              ? any[]
+              : SimplifiedPlainResult<Schema, Model, Args>;
 
-  /**
-   * Find the first matching record
-   */
-  findFirst<T extends FindFirstArgs<Schema, Model>>(
-    input?: T
-  ): Promise<SimplifiedPlainResult<Schema, Model, T> | null>;
+type ModelProcedure<
+  Schema extends SchemaDef,
+  Model extends GetModels<Schema>,
+  Op extends keyof OperationArgs<Schema, Model>
+> =
+  Op extends "findMany"
+    ? {
+        <T extends OperationArgs<Schema, Model>[Op]>(
+          input?: T
+        ): Promise<CallerResultForOp<Schema, Model, Op, T>>;
+        (
+          input?: OperationArgs<Schema, Model>[Op] | undefined
+        ): Promise<
+          CallerResultForOp<Schema, Model, Op, {}>
+        >;
+      }
+    : Op extends "findFirst"
+      ? {
+          <T extends OperationArgs<Schema, Model>[Op]>(
+            input?: T
+          ): Promise<CallerResultForOp<Schema, Model, Op, T>>;
+          (
+            input?: OperationArgs<Schema, Model>[Op] | undefined
+          ): Promise<
+            CallerResultForOp<Schema, Model, Op, {}>
+          >;
+        }
+      : Op extends "count"
+        ? (input?: OperationArgs<Schema, Model>[Op]) => Promise<number>
+        : Op extends CountResultOps
+          ? (input: OperationArgs<Schema, Model>[Op]) => Promise<{ count: number }>
+          : Op extends AnyResultOps
+            ? (input: OperationArgs<Schema, Model>[Op]) => Promise<any>
+            : Op extends "groupBy"
+              ? (input: OperationArgs<Schema, Model>[Op]) => Promise<any[]>
+              : {
+                  <T extends OperationArgs<Schema, Model>[Op]>(
+                    input: T
+                  ): Promise<CallerResultForOp<Schema, Model, Op, T>>;
+                  (
+                    input: OperationArgs<Schema, Model>[Op]
+                  ): Promise<
+                    CallerResultForOp<Schema, Model, Op, {}>
+                  >;
+                };
 
-  /**
-   * Create a new record
-   */
-  create<T extends CreateArgs<Schema, Model>>(
-    input: T
-  ): Promise<SimplifiedPlainResult<Schema, Model, T>>;
-
-  /**
-   * Create multiple records
-   */
-  createMany(
-    input: CreateManyArgs<Schema, Model>
-  ): Promise<{ count: number }>;
-
-  /**
-   * Update a record
-   */
-  update<T extends UpdateArgs<Schema, Model>>(
-    input: T
-  ): Promise<SimplifiedPlainResult<Schema, Model, T>>;
-
-  /**
-   * Update multiple records
-   */
-  updateMany(
-    input: UpdateManyArgs<Schema, Model>
-  ): Promise<{ count: number }>;
-
-  /**
-   * Create or update a record
-   */
-  upsert<T extends UpsertArgs<Schema, Model>>(
-    input: T
-  ): Promise<SimplifiedPlainResult<Schema, Model, T>>;
-
-  /**
-   * Delete a record
-   */
-  delete<T extends DeleteArgs<Schema, Model>>(
-    input: T
-  ): Promise<SimplifiedPlainResult<Schema, Model, T>>;
-
-  /**
-   * Delete multiple records
-   */
-  deleteMany(
-    input: DeleteManyArgs<Schema, Model>
-  ): Promise<{ count: number }>;
-
-  /**
-   * Count records
-   */
-  count(input?: CountArgs<Schema, Model>): Promise<number>;
-
-  /**
-   * Aggregate records
-   */
-  aggregate(input: AggregateArgs<Schema, Model>): Promise<any>;
-
-  /**
-   * Group records
-   */
-  groupBy(input: GroupByArgs<Schema, Model>): Promise<any[]>;
-}
+/**
+ * Type for a single model's procedures - provides FULL dynamic input AND output typing
+ *
+ * When you pass `include` or `select`, the return type automatically includes those fields!
+ */
+export type TypedModelProcedures<
+  Schema extends SchemaDef,
+  Model extends GetModels<Schema>
+> = {
+  [Op in keyof OperationArgs<Schema, Model>]: ModelProcedure<Schema, Model, Op>;
+};
 
 /**
  * Type for the generated router caller - maps model names to their typed procedures
@@ -254,45 +241,47 @@ export function createZenStackRouter<
   return t.router(modelRouters) as ZenStackRouter<Schema, TContext>;
 }
 
-/**
- * Type for a query procedure with proper input/output typing
- * Matches tRPC's internal Procedure interface for type inference and AnyProcedure compatibility
- */
-interface TypedQueryProcedure<TInput, TOutput> {
-  _def: {
-    $types: {
-      input: TInput;
-      output: TOutput;
-    };
-    procedure: true;
-    type: 'query';
-    meta: unknown;
-    experimental_caller: boolean;
-    inputs: unknown[];
-  };
+type ProcedureDef<TInput, TOutput> = {
+  input: TInput;
+  output: TOutput;
   meta: unknown;
-  (opts: unknown): Promise<TOutput>;
-}
+};
 
-/**
- * Type for a mutation procedure with proper input/output typing
- * Matches tRPC's internal Procedure interface for type inference and AnyProcedure compatibility
- */
-interface TypedMutationProcedure<TInput, TOutput> {
-  _def: {
-    $types: {
-      input: TInput;
-      output: TOutput;
-    };
-    procedure: true;
-    type: 'mutation';
-    meta: unknown;
-    experimental_caller: boolean;
-    inputs: unknown[];
-  };
-  meta: unknown;
-  (opts: unknown): Promise<TOutput>;
-}
+type TypedQueryProcedure<TInput, TOutput> = TRPCQueryProcedure<
+  ProcedureDef<TInput, TOutput>
+>;
+
+type TypedMutationProcedure<TInput, TOutput> = TRPCMutationProcedure<
+  ProcedureDef<TInput, TOutput>
+>;
+
+type TRPCInputForOp<
+  Schema extends SchemaDef,
+  Model extends GetModels<Schema>,
+  Op extends keyof OperationArgs<Schema, Model>
+> =
+  Op extends "findMany" | "findFirst" | "count"
+    ? OperationArgs<Schema, Model>[Op] | undefined
+    : OperationArgs<Schema, Model>[Op];
+
+type TRPCOutputForOp<
+  Schema extends SchemaDef,
+  Model extends GetModels<Schema>,
+  Op extends keyof OperationArgs<Schema, Model>
+> =
+  Op extends "findMany"
+    ? DefaultResult<Schema, Model>[]
+    : Op extends "findUnique" | "findFirst"
+      ? DefaultResult<Schema, Model> | null
+      : Op extends CountResultOps
+        ? { count: number }
+        : Op extends NumberResultOps
+          ? number
+          : Op extends AnyResultOps
+            ? any
+            : Op extends "groupBy"
+              ? any[]
+              : DefaultResult<Schema, Model>;
 
 /**
  * Type for a single model's tRPC procedures (for client inference)
@@ -303,58 +292,15 @@ type TRPCModelProcedures<
   Schema extends SchemaDef,
   Model extends GetModels<Schema>
 > = {
-  findMany: TypedQueryProcedure<
-    FindManyArgs<Schema, Model> | undefined,
-    SimplifiedPlainResult<Schema, Model, {}>[]
-  >;
-  findUnique: TypedQueryProcedure<
-    FindUniqueArgs<Schema, Model>,
-    SimplifiedPlainResult<Schema, Model, {}> | null
-  >;
-  findFirst: TypedQueryProcedure<
-    FindFirstArgs<Schema, Model> | undefined,
-    SimplifiedPlainResult<Schema, Model, {}> | null
-  >;
-  create: TypedMutationProcedure<
-    CreateArgs<Schema, Model>,
-    SimplifiedPlainResult<Schema, Model, {}>
-  >;
-  createMany: TypedMutationProcedure<
-    CreateManyArgs<Schema, Model>,
-    { count: number }
-  >;
-  update: TypedMutationProcedure<
-    UpdateArgs<Schema, Model>,
-    SimplifiedPlainResult<Schema, Model, {}>
-  >;
-  updateMany: TypedMutationProcedure<
-    UpdateManyArgs<Schema, Model>,
-    { count: number }
-  >;
-  upsert: TypedMutationProcedure<
-    UpsertArgs<Schema, Model>,
-    SimplifiedPlainResult<Schema, Model, {}>
-  >;
-  delete: TypedMutationProcedure<
-    DeleteArgs<Schema, Model>,
-    SimplifiedPlainResult<Schema, Model, {}>
-  >;
-  deleteMany: TypedMutationProcedure<
-    DeleteManyArgs<Schema, Model>,
-    { count: number }
-  >;
-  count: TypedQueryProcedure<
-    CountArgs<Schema, Model> | undefined,
-    number
-  >;
-  aggregate: TypedQueryProcedure<
-    AggregateArgs<Schema, Model>,
-    any
-  >;
-  groupBy: TypedQueryProcedure<
-    GroupByArgs<Schema, Model>,
-    any[]
-  >;
+  [Op in keyof OperationArgs<Schema, Model>]: Op extends MutationOps
+    ? TypedMutationProcedure<
+        TRPCInputForOp<Schema, Model, Op>,
+        TRPCOutputForOp<Schema, Model, Op>
+      >
+    : TypedQueryProcedure<
+        TRPCInputForOp<Schema, Model, Op>,
+        TRPCOutputForOp<Schema, Model, Op>
+      >;
 };
 
 /**
@@ -387,7 +333,7 @@ export type ZenStackRouter<Schema extends SchemaDef, TContext = any> = {
     record: ZenStackRouterRecord<Schema>;
     router: true;
     procedures: ZenStackRouterRecord<Schema>;
-    lazy: Record<string, unknown>;
+    lazy: AnyRouter["_def"]["lazy"];
   };
   createCaller: (ctx: TContext) => TypedRouterCaller<Schema>;
 } & ZenStackRouterRecord<Schema>;
