@@ -256,6 +256,7 @@ export const trpc = typedClient<Typed>()(_trpc);
 // Now you can use:
 // trpc.generated.user.findMany.useQuery({ include: { posts: true } }) // fully typed
 // trpc.auth.login.useMutation() // other routers unaffected
+// trpc.useUtils().generated.user.findMany.invalidate() // typed query utils
 ```
 
 ### Custom Adapters

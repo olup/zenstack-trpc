@@ -6,6 +6,7 @@ import {
   type TypedRouterCaller,
   type TypedTRPCClient,
   type TypedTRPCReact,
+  type TypedTRPCReactUtils,
   type WithZenStack,
   type WithReact,
   type WithClient,
@@ -520,6 +521,32 @@ describe("Client-side Type Tests", () => {
     });
   });
 
+  describe("Composable Type System - typedClient useUtils typing", () => {
+    type ReactTyped = WithReact<WithZenStack<SchemaType, "generated">>;
+    const mockClient = {} as {
+      useUtils: () => { generated: any; queryClient: unknown };
+      useContext: () => { generated: any; queryClient: unknown };
+      generated: unknown;
+    };
+    const trpc = typedClient<ReactTyped>()(mockClient);
+
+    it("useUtils includes typed generated model utilities", () => {
+      type Utils = ReturnType<typeof trpc.useUtils>;
+      expectTypeOf<Utils>().toHaveProperty("generated");
+      expectTypeOf<Utils["generated"]>().toHaveProperty("user");
+      expectTypeOf<Utils["generated"]["user"]>().toHaveProperty("findMany");
+      expectTypeOf<Utils["generated"]["user"]["findMany"]>().toHaveProperty("invalidate");
+    });
+
+    it("useContext includes typed generated model utilities", () => {
+      type Utils = ReturnType<typeof trpc.useContext>;
+      expectTypeOf<Utils>().toHaveProperty("generated");
+      expectTypeOf<Utils["generated"]>().toHaveProperty("post");
+      expectTypeOf<Utils["generated"]["post"]>().toHaveProperty("findUnique");
+      expectTypeOf<Utils["generated"]["post"]["findUnique"]>().toHaveProperty("getData");
+    });
+  });
+
   describe("Composable Type System - Nesting with paths", () => {
     // Single level nesting
     type SingleNested = WithReact<WithZenStack<SchemaType, "db">>;
@@ -592,6 +619,21 @@ describe("Client-side Type Tests", () => {
       expectTypeOf<UseMutationReturn>().toHaveProperty("isPending");
       expectTypeOf<UseMutationReturn>().toHaveProperty("mutate");
       expectTypeOf<UseMutationReturn>().toHaveProperty("mutateAsync");
+    });
+  });
+
+  describe("TypedTRPCReactUtils - export and structure", () => {
+    type ReactUtils = TypedTRPCReactUtils<SchemaType>;
+
+    it("has model namespaces", () => {
+      expectTypeOf<ReactUtils>().toHaveProperty("user");
+      expectTypeOf<ReactUtils>().toHaveProperty("post");
+    });
+
+    it("model procedures expose utils helpers", () => {
+      expectTypeOf<ReactUtils["user"]>().toHaveProperty("findMany");
+      expectTypeOf<ReactUtils["user"]["findMany"]>().toHaveProperty("invalidate");
+      expectTypeOf<ReactUtils["user"]["findMany"]>().toHaveProperty("getData");
     });
   });
 

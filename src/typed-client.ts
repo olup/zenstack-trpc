@@ -162,6 +162,82 @@ type TypedReactModelHooks<S extends SchemaDef, M extends GetModels<S>> = {
 };
 
 // =============================================================================
+// React Query Utils Types
+// =============================================================================
+
+type Updater<T> = T | ((value: T) => T);
+
+type QueryUtilsProcedure<Args, Data> = {
+  invalidate(input?: Args, filters?: unknown, options?: unknown): Promise<void>;
+  refetch(input?: Args, filters?: unknown, options?: unknown): Promise<void>;
+  reset(input?: Args, filters?: unknown, options?: unknown): Promise<void>;
+  cancel(input?: Args, filters?: unknown, options?: unknown): Promise<void>;
+  fetch(input: Args, opts?: unknown): Promise<Data>;
+  prefetch(input: Args, opts?: unknown): Promise<void>;
+  ensureData(input: Args, opts?: unknown): Promise<Data>;
+  getData(input?: Args): Data | undefined;
+  setData(input: Args, updater: Updater<Data | undefined>, opts?: unknown): void;
+  queryOptions(input: Args, opts?: unknown): unknown;
+  infiniteQueryOptions(input: Args, opts?: unknown): unknown;
+  fetchInfinite(input: Args, opts?: unknown): Promise<unknown>;
+  prefetchInfinite(input: Args, opts?: unknown): Promise<void>;
+  getInfiniteData(input?: Args): unknown;
+  setInfiniteData(input: Args, updater: Updater<unknown>, opts?: unknown): void;
+  [key: string]: unknown;
+};
+
+type MutationUtilsProcedure = {
+  setMutationDefaults(options: unknown): void;
+  getMutationDefaults(): unknown;
+  isMutating(): number;
+  [key: string]: unknown;
+};
+
+interface DynamicQueryUtils<S extends SchemaDef, M extends GetModels<S>, Args, Default, Arr extends boolean> {
+  fetch<T extends Args>(input: T, opts?: unknown): Promise<Result<S, M, T, Default, Arr>>;
+  prefetch<T extends Args>(input: T, opts?: unknown): Promise<void>;
+  ensureData<T extends Args>(input: T, opts?: unknown): Promise<Result<S, M, T, Default, Arr>>;
+  getData<T extends Args>(input?: T): Result<S, M, T, Default, Arr> | undefined;
+  setData<T extends Args>(input: T, updater: Updater<Result<S, M, T, Default, Arr> | undefined>, opts?: unknown): void;
+  invalidate<T extends Args>(input?: T, filters?: unknown, options?: unknown): Promise<void>;
+  refetch<T extends Args>(input?: T, filters?: unknown, options?: unknown): Promise<void>;
+  reset<T extends Args>(input?: T, filters?: unknown, options?: unknown): Promise<void>;
+  cancel<T extends Args>(input?: T, filters?: unknown, options?: unknown): Promise<void>;
+  queryOptions<T extends Args>(input: T, opts?: unknown): unknown;
+  infiniteQueryOptions<T extends Args>(input: T, opts?: unknown): unknown;
+  fetchInfinite<T extends Args>(input: T, opts?: unknown): Promise<unknown>;
+  prefetchInfinite<T extends Args>(input: T, opts?: unknown): Promise<void>;
+  getInfiniteData<T extends Args>(input?: T): unknown;
+  setInfiniteData<T extends Args>(input: T, updater: Updater<unknown>, opts?: unknown): void;
+  [key: string]: unknown;
+}
+
+interface SimpleQueryUtils<Args, Data> extends QueryUtilsProcedure<Args, Data> {}
+
+type ReactUtilsProcedure<S extends SchemaDef, M extends GetModels<S>, Op extends keyof OperationArgs<S, M>> =
+  Op extends MutationOps
+    ? MutationUtilsProcedure
+    : Op extends CountResultOps
+      ? SimpleQueryUtils<OperationArgs<S, M>[Op], { count: number }>
+      : Op extends NumberResultOps
+        ? SimpleQueryUtils<OperationArgs<S, M>[Op], number>
+        : Op extends AnyResultOps
+          ? SimpleQueryUtils<OperationArgs<S, M>[Op], any>
+          : Op extends 'groupBy'
+            ? SimpleQueryUtils<OperationArgs<S, M>[Op], any[]>
+            : DynamicQueryUtils<S, M, OperationArgs<S, M>[Op],
+                Op extends NullableOps ? DefaultResult<S, M> | null : Op extends ArrayOps ? DefaultResult<S, M>[] : DefaultResult<S, M>,
+                Op extends ArrayOps ? true : false>;
+
+type TypedReactModelUtils<S extends SchemaDef, M extends GetModels<S>> = {
+  [Op in keyof OperationArgs<S, M>]: ReactUtilsProcedure<S, M, Op>;
+};
+
+export type TypedTRPCReactUtils<S extends SchemaDef> = {
+  [K in GetModels<S> as Uncapitalize<K>]: TypedReactModelUtils<S, K>;
+};
+
+// =============================================================================
 // Main Type Helpers
 // =============================================================================
 
@@ -210,7 +286,7 @@ export type WithZenStack<S extends SchemaDef, TPath extends string | undefined =
  */
 export type WithReact<T extends WithZenStack<any, any>> =
   T extends WithZenStack<infer S, infer P>
-    ? { readonly __types: TypedTRPCReact<S>; readonly __path: P }
+    ? { readonly __types: TypedTRPCReact<S>; readonly __utils: TypedTRPCReactUtils<S>; readonly __path: P }
     : never;
 
 /**
@@ -230,14 +306,39 @@ export type WithClient<T extends WithZenStack<any, any>> =
 /** Extract the final types from an adapter */
 type ExtractTypes<T> = T extends { readonly __types: infer Types } ? Types : never;
 
+/** Extract the utils types from an adapter */
+type ExtractUtils<T> = T extends { readonly __utils: infer Utils } ? Utils : never;
+
 /** Extract the path from an adapter */
 type ExtractPath<T> = T extends { readonly __path: infer P } ? P : undefined;
+
+type AnyFn = (...args: any[]) => any;
+type IfAny<T, Y, N> = 0 extends 1 & T ? Y : N;
+type Override<T, R> = Omit<T, keyof R> & R;
+type UseUtilsReturn<TClient> = TClient extends { useUtils: AnyFn } ? ReturnType<TClient["useUtils"]> : Record<string, unknown>;
+type BaseUtilsExtras = Record<string, unknown>;
+
+type MergeUtils<TBase, Path extends string | undefined, TUtils> = IfAny<
+  TBase,
+  Path extends string ? ApplyAtPath<BaseUtilsExtras, Path, TUtils> : TUtils & BaseUtilsExtras,
+  Path extends string ? ApplyAtPath<TBase & BaseUtilsExtras, Path, TUtils> : TBase & TUtils & BaseUtilsExtras
+>;
+
+type ApplyUtilsIfPresent<TBase, TClient, Path extends string | undefined, TUtils> = [TUtils] extends [never]
+  ? TBase
+  : Override<
+      TBase,
+      {
+        useUtils: () => MergeUtils<UseUtilsReturn<TClient>, Path, TUtils>;
+        useContext: () => MergeUtils<UseUtilsReturn<TClient>, Path, TUtils>;
+      }
+    >;
 
 /** Apply the typed transformation to a client */
 type ApplyTyped<TClient, T> =
   ExtractPath<T> extends string
-    ? ApplyAtPath<TClient, ExtractPath<T>, ExtractTypes<T>>
-    : ExtractTypes<T>;
+    ? ApplyUtilsIfPresent<ApplyAtPath<TClient, ExtractPath<T>, ExtractTypes<T>>, TClient, ExtractPath<T>, ExtractUtils<T>>
+    : ApplyUtilsIfPresent<ExtractTypes<T>, TClient, undefined, ExtractUtils<T>>;
 
 /**
  * Apply composed types to a tRPC client.

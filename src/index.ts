@@ -46,6 +46,7 @@ export {
   // Underlying types (for custom adapters)
   type TypedTRPCClient,
   type TypedTRPCReact,
+  type TypedTRPCReactUtils,
 } from "./typed-client.js";
 
 // Zod schema generators (for advanced usage)
