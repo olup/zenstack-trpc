@@ -229,7 +229,11 @@ type ReactUtilsProcedure<S extends SchemaDef, M extends GetModels<S>, Op extends
                 Op extends NullableOps ? DefaultResult<S, M> | null : Op extends ArrayOps ? DefaultResult<S, M>[] : DefaultResult<S, M>,
                 Op extends ArrayOps ? true : false>;
 
-type TypedReactModelUtils<S extends SchemaDef, M extends GetModels<S>> = {
+type RouterLevelUtils = {
+  invalidate(input?: undefined, filters?: unknown, options?: unknown): Promise<void>;
+};
+
+type TypedReactModelUtils<S extends SchemaDef, M extends GetModels<S>> = RouterLevelUtils & {
   [Op in keyof OperationArgs<S, M>]: ReactUtilsProcedure<S, M, Op>;
 };
 
@@ -316,7 +320,7 @@ type AnyFn = (...args: any[]) => any;
 type IfAny<T, Y, N> = 0 extends 1 & T ? Y : N;
 type Override<T, R> = Omit<T, keyof R> & R;
 type UseUtilsReturn<TClient> = TClient extends { useUtils: AnyFn } ? ReturnType<TClient["useUtils"]> : Record<string, unknown>;
-type BaseUtilsExtras = Record<string, unknown>;
+type BaseUtilsExtras = Record<string, any>;
 
 type MergeUtils<TBase, Path extends string | undefined, TUtils> = IfAny<
   TBase,

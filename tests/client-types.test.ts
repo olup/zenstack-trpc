@@ -535,6 +535,7 @@ describe("Client-side Type Tests", () => {
       expectTypeOf<Utils>().toHaveProperty("generated");
       expectTypeOf<Utils["generated"]>().toHaveProperty("user");
       expectTypeOf<Utils["generated"]["user"]>().toHaveProperty("findMany");
+      expectTypeOf<Utils["generated"]["user"]>().toHaveProperty("invalidate");
       expectTypeOf<Utils["generated"]["user"]["findMany"]>().toHaveProperty("invalidate");
     });
 
