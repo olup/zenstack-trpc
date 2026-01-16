@@ -274,6 +274,18 @@ describe("Type Tests", () => {
       expectTypeOf(router).toHaveProperty("createCaller");
     });
 
+    it("createZenStackRouter should accept a custom procedure option", () => {
+      const t = initTRPC.context<{ db: any }>().create();
+      const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+        return next({ ctx });
+      });
+      const router = createZenStackRouter(schema, t, {
+        procedure: protectedProcedure,
+      });
+
+      expectTypeOf(router).toHaveProperty("createCaller");
+    });
+
     it("ZenStackRouter should be assignable to AnyRouter", () => {
       // This test verifies that ZenStackRouter can be used where AnyRouter is expected
       // which allows merging without explicit casts

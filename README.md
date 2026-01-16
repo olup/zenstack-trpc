@@ -119,7 +119,7 @@ For each model in your schema, the following procedures are generated:
 
 ## API Reference
 
-### `createZenStackRouter(schema, t)`
+### `createZenStackRouter(schema, t, options?)`
 
 Generates a tRPC router from a ZenStack schema.
 
@@ -129,6 +129,21 @@ import { createZenStackRouter } from "zenstack-trpc";
 
 const t = initTRPC.context<{ db: any }>().create();
 const appRouter = createZenStackRouter(schema, t);
+```
+
+Pass a custom base procedure to apply middleware (e.g., auth) to all generated routes:
+
+```typescript
+import { TRPCError } from "@trpc/server";
+
+const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  return next({ ctx });
+});
+
+const appRouter = createZenStackRouter(schema, t, {
+  procedure: protectedProcedure,
+});
 ```
 
 ### `TypedRouterCaller<SchemaType>`

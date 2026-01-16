@@ -143,13 +143,18 @@ export interface TRPCInstance {
   router: (procedures: Record<string, any>) => any;
 }
 
+export type CreateZenStackRouterOptions = {
+  procedure?: TRPCInstance["procedure"];
+};
+
 /**
  * Creates procedures for a single model
  */
 function createModelProcedures<Schema extends SchemaDef>(
   schema: Schema,
   modelName: string,
-  t: TRPCInstance
+  t: TRPCInstance,
+  procedure: TRPCInstance["procedure"]
 ) {
   const schemas = createModelSchemas(schema, modelName as keyof Schema["models"]);
   const modelNameLower = modelName.charAt(0).toLowerCase() + modelName.slice(1);
@@ -170,9 +175,9 @@ function createModelProcedures<Schema extends SchemaDef>(
     };
 
     if (isQuery) {
-      return t.procedure.input(inputSchema).query(handler);
+      return procedure.input(inputSchema).query(handler);
     } else {
-      return t.procedure.input(inputSchema).mutation(handler);
+      return procedure.input(inputSchema).mutation(handler);
     }
   };
 
@@ -226,16 +231,23 @@ export function createZenStackRouter<
   TContext extends { db: any }
 >(
   schema: Schema,
-  t: TRPCInstance
+  t: TRPCInstance,
+  options?: CreateZenStackRouterOptions
 ): ZenStackRouter<Schema, TContext> {
   const modelRouters: Record<string, ReturnType<typeof createModelProcedures>> = {};
+  const procedure = options?.procedure ?? t.procedure;
 
   // Get all model names from the schema
   const modelNames = Object.keys(schema.models);
 
   for (const modelName of modelNames) {
     const modelNameLower = modelName.charAt(0).toLowerCase() + modelName.slice(1);
-    modelRouters[modelNameLower] = createModelProcedures(schema, modelName, t);
+    modelRouters[modelNameLower] = createModelProcedures(
+      schema,
+      modelName,
+      t,
+      procedure
+    );
   }
 
   return t.router(modelRouters) as ZenStackRouter<Schema, TContext>;

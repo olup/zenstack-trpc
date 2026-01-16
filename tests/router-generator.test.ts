@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import { createZenStackRouter, type ZenStackRouter } from "../src/index.js";
 import { createTestDb, setupTestDb, cleanupTestDb, removeTestDb } from "./setup.js";
@@ -68,6 +68,31 @@ describe("Router Generator", () => {
       expect(caller.post.count).toBeDefined();
       expect(caller.post.aggregate).toBeDefined();
       expect(caller.post.groupBy).toBeDefined();
+    });
+
+    it("should allow overriding the base procedure", async () => {
+      type ProtectedContext = TestContext & { user?: { id: string } };
+      const t = initTRPC.context<ProtectedContext>().create();
+      const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+        if (!ctx.user) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        return next({ ctx });
+      });
+      const protectedRouter = createZenStackRouter(schema, t, {
+        procedure: protectedProcedure,
+      });
+      const protectedCaller = protectedRouter.createCaller({ db });
+
+      await expect(protectedCaller.user.findMany()).rejects.toThrowError(
+        TRPCError
+      );
+
+      const authedCaller = protectedRouter.createCaller({
+        db,
+        user: { id: "user_1" },
+      });
+      await expect(authedCaller.user.findMany()).resolves.toEqual([]);
     });
   });
 
