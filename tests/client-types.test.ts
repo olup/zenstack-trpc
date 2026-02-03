@@ -548,6 +548,92 @@ describe("Client-side Type Tests", () => {
     });
   });
 
+  describe("Composable Type System - useUtils merging preserves types (regression test)", () => {
+    // This test verifies that when ZenStack types are merged with an existing
+    // tRPC client that has its own typed utils, the types are preserved and
+    // don't become 'any' due to Record<string, any> intersection.
+    //
+    // Bug context: If BaseUtilsExtras = Record<string, any>, then intersecting
+    // { custom: CustomType } & Record<string, any> would widen custom to 'any'.
+    // The fix is to use Record<string, unknown> instead.
+
+    // Simulate a tRPC client with custom (non-ZenStack) routers that have typed utils
+    type CustomRouterUtils = {
+      customRouter: {
+        customProcedure: {
+          invalidate: () => Promise<void>;
+          getData: () => { customField: string } | undefined;
+        };
+      };
+      anotherRouter: {
+        anotherProcedure: {
+          invalidate: () => Promise<void>;
+          getData: () => { anotherField: number } | undefined;
+        };
+      };
+    };
+
+    // Mock client with properly typed base utils (not any)
+    type MockClientWithTypedUtils = {
+      useUtils: () => CustomRouterUtils & { queryClient: unknown };
+      useContext: () => CustomRouterUtils & { queryClient: unknown };
+      generated: unknown;
+    };
+
+    type ReactTyped = WithReact<WithZenStack<SchemaType, "generated">>;
+    const trpcWithTypedBase = typedClient<ReactTyped>()({} as MockClientWithTypedUtils);
+
+    it("preserves custom router utils types (not widened to any)", () => {
+      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
+
+      // The custom router utils should still be properly typed
+      expectTypeOf<Utils["customRouter"]>().not.toBeAny();
+      expectTypeOf<Utils["customRouter"]["customProcedure"]>().not.toBeAny();
+      expectTypeOf<Utils["customRouter"]["customProcedure"]["getData"]>().not.toBeAny();
+
+      // Verify the actual return type is preserved
+      type GetDataReturn = ReturnType<Utils["customRouter"]["customProcedure"]["getData"]>;
+      expectTypeOf<GetDataReturn>().not.toBeAny();
+      // Should have customField
+      type NonNullReturn = NonNullable<GetDataReturn>;
+      expectTypeOf<NonNullReturn>().toHaveProperty("customField");
+    });
+
+    it("preserves another router utils types (not widened to any)", () => {
+      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
+
+      expectTypeOf<Utils["anotherRouter"]>().not.toBeAny();
+      expectTypeOf<Utils["anotherRouter"]["anotherProcedure"]>().not.toBeAny();
+
+      type GetDataReturn = ReturnType<Utils["anotherRouter"]["anotherProcedure"]["getData"]>;
+      expectTypeOf<GetDataReturn>().not.toBeAny();
+      type NonNullReturn = NonNullable<GetDataReturn>;
+      expectTypeOf<NonNullReturn>().toHaveProperty("anotherField");
+    });
+
+    it("ZenStack utils are also properly typed", () => {
+      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
+
+      expectTypeOf<Utils["generated"]>().not.toBeAny();
+      expectTypeOf<Utils["generated"]["user"]>().not.toBeAny();
+      expectTypeOf<Utils["generated"]["user"]["findMany"]>().not.toBeAny();
+      expectTypeOf<Utils["generated"]["user"]["findMany"]["invalidate"]>().not.toBeAny();
+    });
+
+    it("both custom and ZenStack utils coexist with correct types", () => {
+      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
+
+      // Custom utils
+      expectTypeOf<Utils>().toHaveProperty("customRouter");
+      expectTypeOf<Utils>().toHaveProperty("anotherRouter");
+
+      // ZenStack utils
+      expectTypeOf<Utils>().toHaveProperty("generated");
+      expectTypeOf<Utils["generated"]>().toHaveProperty("user");
+      expectTypeOf<Utils["generated"]>().toHaveProperty("post");
+    });
+  });
+
   describe("Composable Type System - Nesting with paths", () => {
     // Single level nesting
     type SingleNested = WithReact<WithZenStack<SchemaType, "db">>;

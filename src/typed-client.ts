@@ -320,7 +320,7 @@ type AnyFn = (...args: any[]) => any;
 type IfAny<T, Y, N> = 0 extends 1 & T ? Y : N;
 type Override<T, R> = Omit<T, keyof R> & R;
 type UseUtilsReturn<TClient> = TClient extends { useUtils: AnyFn } ? ReturnType<TClient["useUtils"]> : Record<string, unknown>;
-type BaseUtilsExtras = Record<string, any>;
+type BaseUtilsExtras = Record<string, unknown>;
 
 type MergeUtils<TBase, Path extends string | undefined, TUtils> = IfAny<
   TBase,
