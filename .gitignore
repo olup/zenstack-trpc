@@ -26,5 +26,11 @@ Thumbs.db
 # Coverage
 coverage/
 
+# ZenStack generate artifacts (outside zenstack/ folder)
+tests/fixtures/input.ts
+tests/fixtures/models.ts
+tests/fixtures/schema.ts
+tests/fixtures/prisma/
+
 # Claude
 .claude/

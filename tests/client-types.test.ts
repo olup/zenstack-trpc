@@ -1,5 +1,6 @@
 import { describe, it, expectTypeOf } from "vitest";
-import { initTRPC, inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import { initTRPC, inferRouterInputs, inferRouterOutputs, type AnyRouter } from "@trpc/server";
+import { createTRPCReact } from "@trpc/react-query";
 import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import {
   createZenStackRouter,
@@ -548,89 +549,89 @@ describe("Client-side Type Tests", () => {
     });
   });
 
-  describe("Composable Type System - useUtils merging preserves types (regression test)", () => {
-    // This test verifies that when ZenStack types are merged with an existing
-    // tRPC client that has its own typed utils, the types are preserved and
-    // don't become 'any' due to Record<string, any> intersection.
-    //
-    // Bug context: If BaseUtilsExtras = Record<string, any>, then intersecting
-    // { custom: CustomType } & Record<string, any> would widen custom to 'any'.
-    // The fix is to use Record<string, unknown> instead.
+  describe("Composable Type System - useUtils merging preserves types (realistic apiV4 pattern)", () => {
+    // This mirrors the real-world setup in apiV4:
+    // - A merged appRouter with custom routers (admin, chat, session) + generated ZenStack router
+    // - createTRPCReact<AppRouter>() for the base client with real tRPC-inferred types
+    // - typedClient<WithReact<WithZenStack<SchemaType, "generated">>>() to apply ZenStack types
 
-    // Simulate a tRPC client with custom (non-ZenStack) routers that have typed utils
-    type CustomRouterUtils = {
-      customRouter: {
-        customProcedure: {
-          invalidate: () => Promise<void>;
-          getData: () => { customField: string } | undefined;
-        };
-      };
-      anotherRouter: {
-        anotherProcedure: {
-          invalidate: () => Promise<void>;
-          getData: () => { anotherField: number } | undefined;
-        };
-      };
-    };
+    const t = initTRPC.context<{ db: any }>().create();
 
-    // Mock client with properly typed base utils (not any)
-    type MockClientWithTypedUtils = {
-      useUtils: () => CustomRouterUtils & { queryClient: unknown };
-      useContext: () => CustomRouterUtils & { queryClient: unknown };
-      generated: unknown;
-    };
+    // Custom routers (like admin/chat/session in apiV4)
+    const adminRouter = t.router({
+      getStats: t.procedure.query(() => ({ totalUsers: 42, activeUsers: 10 })),
+      banUser: t.procedure.input((v: unknown) => v as { userId: string }).mutation(() => ({ success: true })),
+    });
 
+    const chatRouter = t.router({
+      sendMessage: t.procedure.input((v: unknown) => v as { text: string }).mutation(() => ({ messageId: "123" })),
+    });
+
+    // Generated ZenStack router (cast to AnyRouter like in apiV4)
+    const generatedRouter = createZenStackRouter(schema, t) as unknown as AnyRouter;
+
+    // Merged app router - same pattern as apiV4
+    const appRouter = t.router({
+      admin: adminRouter,
+      chat: chatRouter,
+      generated: generatedRouter,
+    });
+    type AppRouter = typeof appRouter;
+
+    // createTRPCReact with real AppRouter types - exactly like apiV4
+    const _trpc = createTRPCReact<AppRouter>();
     type ReactTyped = WithReact<WithZenStack<SchemaType, "generated">>;
-    const trpcWithTypedBase = typedClient<ReactTyped>()({} as MockClientWithTypedUtils);
+    const trpc = typedClient<ReactTyped>()(_trpc);
 
-    it("preserves custom router utils types (not widened to any)", () => {
-      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
+    it("preserves custom router utils types from real tRPC inference", () => {
+      type Utils = ReturnType<typeof trpc.useUtils>;
 
-      // The custom router utils should still be properly typed
-      expectTypeOf<Utils["customRouter"]>().not.toBeAny();
-      expectTypeOf<Utils["customRouter"]["customProcedure"]>().not.toBeAny();
-      expectTypeOf<Utils["customRouter"]["customProcedure"]["getData"]>().not.toBeAny();
+      // admin router utils should be properly typed (not any)
+      expectTypeOf<Utils["admin"]>().not.toBeAny();
+      expectTypeOf<Utils["admin"]["getStats"]>().not.toBeAny();
+      expectTypeOf<Utils["admin"]["getStats"]["invalidate"]>().not.toBeAny();
+      expectTypeOf<Utils["admin"]["banUser"]>().not.toBeAny();
 
-      // Verify the actual return type is preserved
-      type GetDataReturn = ReturnType<Utils["customRouter"]["customProcedure"]["getData"]>;
-      expectTypeOf<GetDataReturn>().not.toBeAny();
-      // Should have customField
-      type NonNullReturn = NonNullable<GetDataReturn>;
-      expectTypeOf<NonNullReturn>().toHaveProperty("customField");
+      // chat router utils should be properly typed
+      expectTypeOf<Utils["chat"]>().not.toBeAny();
+      expectTypeOf<Utils["chat"]["sendMessage"]>().not.toBeAny();
     });
 
-    it("preserves another router utils types (not widened to any)", () => {
-      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
-
-      expectTypeOf<Utils["anotherRouter"]>().not.toBeAny();
-      expectTypeOf<Utils["anotherRouter"]["anotherProcedure"]>().not.toBeAny();
-
-      type GetDataReturn = ReturnType<Utils["anotherRouter"]["anotherProcedure"]["getData"]>;
-      expectTypeOf<GetDataReturn>().not.toBeAny();
-      type NonNullReturn = NonNullable<GetDataReturn>;
-      expectTypeOf<NonNullReturn>().toHaveProperty("anotherField");
-    });
-
-    it("ZenStack utils are also properly typed", () => {
-      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
+    it("ZenStack generated utils are properly typed at the nested path", () => {
+      type Utils = ReturnType<typeof trpc.useUtils>;
 
       expectTypeOf<Utils["generated"]>().not.toBeAny();
       expectTypeOf<Utils["generated"]["user"]>().not.toBeAny();
       expectTypeOf<Utils["generated"]["user"]["findMany"]>().not.toBeAny();
       expectTypeOf<Utils["generated"]["user"]["findMany"]["invalidate"]>().not.toBeAny();
+      expectTypeOf<Utils["generated"]["post"]>().not.toBeAny();
+      expectTypeOf<Utils["generated"]["post"]["findUnique"]>().not.toBeAny();
     });
 
-    it("both custom and ZenStack utils coexist with correct types", () => {
-      type Utils = ReturnType<typeof trpcWithTypedBase.useUtils>;
+    it("all router utils coexist with correct types", () => {
+      type Utils = ReturnType<typeof trpc.useUtils>;
 
-      // Custom utils
-      expectTypeOf<Utils>().toHaveProperty("customRouter");
-      expectTypeOf<Utils>().toHaveProperty("anotherRouter");
+      // Custom routers
+      expectTypeOf<Utils>().toHaveProperty("admin");
+      expectTypeOf<Utils>().toHaveProperty("chat");
 
-      // ZenStack utils
+      // ZenStack generated
       expectTypeOf<Utils>().toHaveProperty("generated");
       expectTypeOf<Utils["generated"]>().toHaveProperty("user");
       expectTypeOf<Utils["generated"]>().toHaveProperty("post");
+    });
+
+    it("typed hooks on custom routers are preserved", () => {
+      // admin.getStats.useQuery should still work with proper types
+      expectTypeOf<typeof trpc.admin.getStats.useQuery>().not.toBeAny();
+      expectTypeOf<typeof trpc.admin.banUser.useMutation>().not.toBeAny();
+      expectTypeOf<typeof trpc.chat.sendMessage.useMutation>().not.toBeAny();
+    });
+
+    it("typed hooks on generated router have ZenStack overrides", () => {
+      expectTypeOf<typeof trpc.generated.user.findMany.useQuery>().not.toBeAny();
+      expectTypeOf<typeof trpc.generated.user.create.useMutation>().not.toBeAny();
+      expectTypeOf<typeof trpc.generated.post.findUnique.useQuery>().not.toBeAny();
     });
   });
 

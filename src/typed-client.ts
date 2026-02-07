@@ -319,13 +319,12 @@ type ExtractPath<T> = T extends { readonly __path: infer P } ? P : undefined;
 type AnyFn = (...args: any[]) => any;
 type IfAny<T, Y, N> = 0 extends 1 & T ? Y : N;
 type Override<T, R> = Omit<T, keyof R> & R;
-type UseUtilsReturn<TClient> = TClient extends { useUtils: AnyFn } ? ReturnType<TClient["useUtils"]> : Record<string, unknown>;
-type BaseUtilsExtras = Record<string, unknown>;
+type UseUtilsReturn<TClient> = TClient extends { useUtils: AnyFn } ? ReturnType<TClient["useUtils"]> : Record<string, any>;
 
 type MergeUtils<TBase, Path extends string | undefined, TUtils> = IfAny<
   TBase,
-  Path extends string ? ApplyAtPath<BaseUtilsExtras, Path, TUtils> : TUtils & BaseUtilsExtras,
-  Path extends string ? ApplyAtPath<TBase & BaseUtilsExtras, Path, TUtils> : TBase & TUtils & BaseUtilsExtras
+  Path extends string ? ApplyAtPath<Record<string, any>, Path, TUtils> : TUtils & Record<string, any>,
+  Path extends string ? ApplyAtPath<TBase, Path, TUtils> : TBase & TUtils
 >;
 
 type ApplyUtilsIfPresent<TBase, TClient, Path extends string | undefined, TUtils> = [TUtils] extends [never]

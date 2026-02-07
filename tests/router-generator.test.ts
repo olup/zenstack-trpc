@@ -91,7 +91,7 @@ describe("Router Generator", () => {
       const authedCaller = protectedRouter.createCaller({
         db,
         user: { id: "user_1" },
-      });
+      } as ProtectedContext);
       await expect(authedCaller.user.findMany()).resolves.toEqual([]);
     });
   });
