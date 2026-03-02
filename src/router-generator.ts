@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import type {
-  AnyRouter,
+  TRPCBuiltRouter,
   TRPCQueryProcedure,
   TRPCMutationProcedure,
 } from "@trpc/server";
@@ -133,6 +133,11 @@ export type TypedRouterCaller<Schema extends SchemaDef> = {
  * Minimal tRPC instance interface required by createZenStackRouter
  */
 export interface TRPCInstance {
+  _config?: {
+    $types?: {
+      ctx?: any;
+    };
+  };
   procedure: {
     input: (schema: z.ZodType) => {
       query: (handler: (opts: { ctx: any; input: any }) => Promise<any>) => any;
@@ -141,6 +146,9 @@ export interface TRPCInstance {
   };
   router: (procedures: Record<string, any>) => any;
 }
+
+/** Extracts the context type from a tRPC instance */
+type InferTRPCContext<T> = T extends { _config: { $types: { ctx: infer Ctx } } } ? Ctx : any;
 
 export type CreateZenStackRouterOptions = {
   procedure?: TRPCInstance["procedure"];
@@ -244,12 +252,12 @@ function createModelProcedures<Schema extends SchemaDef>(
  */
 export function createZenStackRouter<
   Schema extends SchemaDef,
-  TContext extends { db: any }
+  T extends TRPCInstance
 >(
   schema: Schema,
-  t: TRPCInstance,
+  t: T,
   options?: CreateZenStackRouterOptions
-): ZenStackRouter<Schema, TContext> {
+): ZenStackRouter<Schema, InferTRPCContext<T>> {
   const modelRouters: Record<string, ReturnType<typeof createModelProcedures>> = {};
   const procedure = options?.procedure ?? t.procedure;
   const zodFactory = createQuerySchemaFactory(schema);
@@ -268,7 +276,7 @@ export function createZenStackRouter<
     );
   }
 
-  return t.router(modelRouters) as ZenStackRouter<Schema, TContext>;
+  return t.router(modelRouters) as ZenStackRouter<Schema, InferTRPCContext<T>>;
 }
 
 type ProcedureDef<TInput, TOutput> = {
@@ -344,26 +352,15 @@ export type ZenStackRouterRecord<Schema extends SchemaDef> = {
 /**
  * The typed router type that clients can use for proper inference.
  * Compatible with tRPC's AnyRouter for use in merged routers.
+ *
+ * Built on top of TRPCBuiltRouter so it satisfies `Router<any, infer TRecord>`
+ * in DecorateCreateRouterOptions — preventing `never` when nesting via t.router({}).
+ * The extra `createCaller` intersection overrides the return type so that
+ * ReturnType<createCaller> resolves to TypedRouterCaller (better inference),
+ * while the underlying tRPC-compatible signature keeps composition working.
  */
-export type ZenStackRouter<Schema extends SchemaDef, TContext = any> = {
-  _def: {
-    _config: {
-      $types: {
-        ctx: TContext;
-        meta: object;
-        errorShape: any;
-        transformer: false;
-      };
-      transformer: any;
-      errorFormatter: any;
-      allowOutsideOfServer: boolean;
-      isServer: boolean;
-      isDev: boolean;
-    };
-    record: ZenStackRouterRecord<Schema>;
-    router: true;
-    procedures: ZenStackRouterRecord<Schema>;
-    lazy: AnyRouter["_def"]["lazy"];
-  };
-  createCaller: (ctx: TContext) => TypedRouterCaller<Schema>;
-} & ZenStackRouterRecord<Schema>;
+export type ZenStackRouter<Schema extends SchemaDef, TContext = any> =
+  TRPCBuiltRouter<
+    { ctx: TContext; meta: object; errorShape: any; transformer: false },
+    ZenStackRouterRecord<Schema>
+  > & { createCaller: (ctx: TContext) => TypedRouterCaller<Schema> };

@@ -1,5 +1,5 @@
 import { describe, it, expectTypeOf } from "vitest";
-import { initTRPC, type AnyRouter } from "@trpc/server";
+import { initTRPC, inferRouterInputs, type AnyRouter } from "@trpc/server";
 import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import {
   createZenStackRouter,
@@ -260,6 +260,22 @@ describe("Type Tests", () => {
   });
 
   describe("Router creation types", () => {
+    it("should infer context type including typed db from tRPC instance", () => {
+      // A deliberately specific db shape so we can distinguish it from `any`
+      type MyDb = { $disconnect: () => Promise<void>; user: unknown };
+      type MyContext = { db: MyDb; sessionToken: string };
+
+      const t = initTRPC.context<MyContext>().create();
+      const router = createZenStackRouter(schema, t);
+
+      type RouterCtx = Parameters<typeof router.createCaller>[0];
+
+      // Before the fix, RouterCtx was { db: any } — it would NOT have sessionToken.
+      // After the fix, RouterCtx is inferred as MyContext.
+      expectTypeOf<RouterCtx>().toExtend<{ sessionToken: string }>();
+      expectTypeOf<RouterCtx["db"]>().toExtend<MyDb>();
+    });
+
     it("initTRPC should return a tRPC instance", () => {
       const t = initTRPC.context<{ db: any }>().create();
 
@@ -296,6 +312,42 @@ describe("Type Tests", () => {
 
       // The router should have createCaller
       expectTypeOf<TestRouter>().toHaveProperty("createCaller");
+    });
+
+    it("ZenStackRouter should not produce never when nested in t.router({})", () => {
+      // Before the fix, `generated` would resolve to `never` in the merged router
+      // because ZenStackRouter didn't satisfy `Router<any, infer TRecord>` in
+      // tRPC's DecorateCreateRouterOptions check.
+      const t = initTRPC.context<{ db: any }>().create();
+      const generatedRouter = createZenStackRouter(schema, t);
+
+      const appRouter = t.router({
+        generated: generatedRouter,
+      });
+
+      // If `generated` were `never`, accessing user/post would also be `never`
+      type GeneratedRecord = typeof appRouter._def.record["generated"];
+      expectTypeOf<GeneratedRecord>().not.toBeNever();
+      expectTypeOf<GeneratedRecord>().toHaveProperty("user");
+      expectTypeOf<GeneratedRecord>().toHaveProperty("post");
+    });
+
+    it("nested ZenStackRouter create.data should have model fields, not be empty", () => {
+      const t = initTRPC.context<{ db: any }>().create();
+      const generatedRouter = createZenStackRouter(schema, t);
+      const appRouter = t.router({ generated: generatedRouter });
+      type AppRouter = typeof appRouter;
+
+      // Use tRPC's standard inference helpers — same as client code would
+      type Inputs = inferRouterInputs<AppRouter>;
+      type CreateInput = Inputs["generated"]["user"]["create"];
+
+      // data must exist and must not be empty/never
+      type DataType = CreateInput extends { data: infer D } ? D : never;
+      expectTypeOf<DataType>().not.toBeNever();
+
+      // data must carry the actual model fields
+      expectTypeOf<DataType>().toHaveProperty("email");
     });
   });
 });
