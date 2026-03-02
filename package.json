@@ -1,6 +1,6 @@
 {
   "name": "zenstack-trpc",
-  "version": "0.1.22",
+  "version": "0.2.0",
   "description": "Auto-generate type-safe tRPC routers from ZenStack V3 schemas",
   "type": "module",
   "main": "./dist/index.js",
@@ -55,7 +55,8 @@
     "@tanstack/react-query": ">=5.0.0",
     "@trpc/react-query": ">=11.0.0",
     "@trpc/server": ">=11.0.0",
-    "@zenstackhq/orm": ">=3.0.0",
+    "@zenstackhq/orm": ">=3.4.0",
+    "@zenstackhq/zod": ">=3.4.0",
     "zod": ">=3.0.0 || >=4.0.0"
   },
   "peerDependenciesMeta": {
@@ -73,8 +74,9 @@
     "@trpc/server": "^11.9.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.3",
-    "@zenstackhq/cli": "3.3.2",
-    "@zenstackhq/orm": "^3.3.2",
+    "@zenstackhq/cli": "^3.4.0",
+    "@zenstackhq/orm": "^3.4.0",
+    "@zenstackhq/zod": "^3.4.0",
     "better-sqlite3": "^12.5.0",
     "kysely": "^0.28.9",
     "tsx": "^4.21.0",

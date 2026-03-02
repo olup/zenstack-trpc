@@ -50,14 +50,5 @@ export {
   type TypedTRPCReactUtils,
 } from "./typed-client.js";
 
-// Zod schema generators (for advanced usage)
-export {
-  createModelSchemas,
-  createWhereSchema,
-  createCreateDataSchema,
-  createUpdateDataSchema,
-  createUniqueWhereSchema,
-  createSelectSchema,
-  createIncludeSchema,
-  createOrderBySchema,
-} from "./zod-schemas.js";
+// Zod schema factory (for advanced usage — use createQuerySchemaFactory from @zenstackhq/orm directly)
+export { createQuerySchemaFactory } from "@zenstackhq/orm";

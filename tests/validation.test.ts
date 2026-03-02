@@ -2,11 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { schema, SchemaType } from "./fixtures/zenstack/schema.js";
 import { createZenStackRouter, type ZenStackRouter } from "../src/index.js";
-import {
-  createWhereSchema,
-  createCreateDataSchema,
-  createModelSchemas,
-} from "../src/zod-schemas.js";
+import { createQuerySchemaFactory } from "@zenstackhq/orm";
 import { createTestDb, setupTestDb, removeTestDb } from "./setup.js";
 
 type TestDb = ReturnType<typeof createTestDb>;
@@ -36,24 +32,21 @@ describe("Validation Tests", () => {
   });
 
   describe("Zod Schema Validation Failures", () => {
+    const factory = createQuerySchemaFactory(schema);
+
     describe("Where Schema Validation", () => {
       it("should reject invalid filter operators", () => {
-        const whereSchema = createWhereSchema(schema, "User");
-
-        // Invalid operator value type
         expect(() =>
-          whereSchema.parse({
-            email: { contains: 123 }, // should be string
+          factory.makeFindManySchema("User").parse({
+            where: { email: { contains: 123 } }, // contains should be string
           })
         ).toThrow();
       });
 
       it("should reject invalid boolean values", () => {
-        const whereSchema = createWhereSchema(schema, "Post");
-
         expect(() =>
-          whereSchema.parse({
-            published: "yes", // should be boolean
+          factory.makeFindManySchema("Post").parse({
+            where: { published: "yes" }, // should be boolean
           })
         ).toThrow();
       });
@@ -61,44 +54,34 @@ describe("Validation Tests", () => {
 
     describe("Create Data Schema Validation", () => {
       it("should reject wrong type for email field", () => {
-        const createSchema = createCreateDataSchema(schema, "User");
-
         expect(() =>
-          createSchema.parse({
-            email: 12345, // should be string
+          factory.makeCreateSchema("User").parse({
+            data: { email: 12345 }, // should be string
           })
         ).toThrow();
       });
 
       it("should reject wrong type for boolean field", () => {
-        const createSchema = createCreateDataSchema(schema, "Post");
-
         expect(() =>
-          createSchema.parse({
-            title: "Test",
-            published: "true", // should be boolean
-            authorId: "123",
+          factory.makeCreateSchema("Post").parse({
+            data: { title: "Test", published: "true", authorId: "123" }, // published should be boolean
           })
         ).toThrow();
       });
 
       it("should reject array instead of single value", () => {
-        const createSchema = createCreateDataSchema(schema, "User");
-
         expect(() =>
-          createSchema.parse({
-            email: ["test@example.com"], // should be single string
+          factory.makeCreateSchema("User").parse({
+            data: { email: ["test@example.com"] }, // should be single string
           })
         ).toThrow();
       });
     });
 
     describe("Operation Schema Validation", () => {
-      const schemas = createModelSchemas(schema, "User");
-
       it("should reject findUnique without where clause", () => {
         expect(() =>
-          schemas.findUnique.parse({
+          factory.makeFindUniqueSchema("User").parse({
             // missing required 'where'
             include: { posts: true },
           })
@@ -107,7 +90,7 @@ describe("Validation Tests", () => {
 
       it("should reject create without data clause", () => {
         expect(() =>
-          schemas.create.parse({
+          factory.makeCreateSchema("User").parse({
             // missing required 'data'
             include: { posts: true },
           })
@@ -116,7 +99,7 @@ describe("Validation Tests", () => {
 
       it("should reject update without where clause", () => {
         expect(() =>
-          schemas.update.parse({
+          factory.makeUpdateSchema("User").parse({
             // missing required 'where'
             data: { name: "Test" },
           })
@@ -125,7 +108,7 @@ describe("Validation Tests", () => {
 
       it("should reject update without data clause", () => {
         expect(() =>
-          schemas.update.parse({
+          factory.makeUpdateSchema("User").parse({
             where: { id: "123" },
             // missing required 'data'
           })
@@ -134,7 +117,7 @@ describe("Validation Tests", () => {
 
       it("should reject delete without where clause", () => {
         expect(() =>
-          schemas.delete.parse({
+          factory.makeDeleteSchema("User").parse({
             // missing required 'where'
           })
         ).toThrow();
@@ -142,7 +125,7 @@ describe("Validation Tests", () => {
 
       it("should reject upsert without required clauses", () => {
         expect(() =>
-          schemas.upsert.parse({
+          factory.makeUpsertSchema("User").parse({
             where: { id: "123" },
             // missing 'create' and 'update'
           })
@@ -151,7 +134,7 @@ describe("Validation Tests", () => {
 
       it("should reject groupBy without by field", () => {
         expect(() =>
-          schemas.groupBy.parse({
+          factory.makeGroupBySchema("User").parse({
             // missing required 'by'
             _count: true,
           })
@@ -160,7 +143,7 @@ describe("Validation Tests", () => {
 
       it("should reject invalid skip value", () => {
         expect(() =>
-          schemas.findMany.parse({
+          factory.makeFindManySchema("User").parse({
             skip: "10", // should be number
           })
         ).toThrow();
@@ -168,7 +151,7 @@ describe("Validation Tests", () => {
 
       it("should reject invalid take value", () => {
         expect(() =>
-          schemas.findMany.parse({
+          factory.makeFindManySchema("User").parse({
             take: "5", // should be number
           })
         ).toThrow();
@@ -176,7 +159,7 @@ describe("Validation Tests", () => {
 
       it("should reject invalid orderBy direction", () => {
         expect(() =>
-          schemas.findMany.parse({
+          factory.makeFindManySchema("User").parse({
             orderBy: { email: "ascending" }, // should be 'asc' or 'desc'
           })
         ).toThrow();

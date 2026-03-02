@@ -306,20 +306,71 @@ const trpc = _trpc as unknown as TypedTRPCReact<SchemaType>;
 
 ### Zod Schema Access
 
-Access the generated Zod schemas for custom validation:
+Access the Zod schemas for custom validation via `createQuerySchemaFactory` from `@zenstackhq/orm`:
 
 ```typescript
-import { createModelSchemas, createWhereSchema } from "zenstack-trpc";
+import { createQuerySchemaFactory } from "@zenstackhq/orm";
+// or re-exported from zenstack-trpc:
+import { createQuerySchemaFactory } from "zenstack-trpc";
 
-const userSchemas = createModelSchemas(schema, "User");
+const factory = createQuerySchemaFactory(schema);
+
+// Get schema for any operation:
+const findManySchema = factory.makeFindManySchema("User");
+const createSchema = factory.makeCreateSchema("User");
+const updateSchema = factory.makeUpdateSchema("User");
+// ... makeFindUniqueSchema, makeFindFirstSchema, makeCreateManySchema,
+//     makeUpdateManySchema, makeUpsertSchema, makeDeleteSchema,
+//     makeDeleteManySchema, makeCountSchema, makeAggregateSchema, makeGroupBySchema
 ```
+
+## Compatibility
+
+| zenstack-trpc | @zenstackhq/orm | tRPC | Zod |
+|--------------|----------------|------|-----|
+| `>= 0.2.0`   | `>= 3.4.0`     | `>= 11.0.0` | `>= 3.25.0 \|\| >= 4.0.0` |
+| `< 0.2.0`    | `>= 3.0.0`     | `>= 11.0.0` | `>= 3.0.0 \|\| >= 4.0.0` |
+
+> **Note:** This library targets ZenStack V3 only. ZenStack V2 is not supported.
+
+## Migration Guide
+
+### `0.1.x` → `0.2.0`
+
+**Requires `@zenstackhq/orm >= 3.4.0`** (upgrade ZenStack first).
+
+Input validation is now powered by ZenStack's built-in `createQuerySchemaFactory` instead of a hand-rolled implementation. This means schemas are guaranteed to stay in sync with the ORM's own type definitions, and ZModel validation attributes (`@email`, `@length`, `@regex`, etc.) are automatically respected.
+
+**Breaking changes:**
+
+The schema helper functions exported by this library are removed. If you were importing them directly, switch to `createQuerySchemaFactory` from `@zenstackhq/orm`:
+
+```typescript
+// Before (0.1.x)
+import { createModelSchemas, createWhereSchema } from "zenstack-trpc";
+const schemas = createModelSchemas(schema, "User");
+schemas.findMany.parse(input);
+schemas.create.parse(input);
+
+// After (0.2.0)
+import { createQuerySchemaFactory } from "@zenstackhq/orm";
+// or: import { createQuerySchemaFactory } from "zenstack-trpc";
+
+const factory = createQuerySchemaFactory(schema);
+factory.makeFindManySchema("User").parse(input);
+factory.makeCreateSchema("User").parse(input);
+```
+
+Removed exports: `createModelSchemas`, `createWhereSchema`, `createCreateDataSchema`, `createUpdateDataSchema`, `createUniqueWhereSchema`, `createSelectSchema`, `createIncludeSchema`, `createOrderBySchema`.
+
+The `createZenStackRouter` call itself is unchanged — no migration needed there.
 
 ## Requirements
 
 - Node.js >= 18
-- ZenStack V3 (`@zenstackhq/orm` >= 3.0.0)
+- ZenStack V3 (`@zenstackhq/orm >= 3.4.0`)
 - tRPC >= 11.0.0
-- Zod >= 3.0.0
+- Zod >= 3.25.0 or >= 4.0.0
 
 ### Optional (for React hooks)
 

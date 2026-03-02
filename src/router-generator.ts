@@ -5,9 +5,8 @@ import type {
   TRPCMutationProcedure,
 } from "@trpc/server";
 import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
-import type { SimplifiedPlainResult } from "@zenstackhq/orm";
+import { createQuerySchemaFactory, type SimplifiedPlainResult } from "@zenstackhq/orm";
 import { z } from "zod";
-import { createModelSchemas } from "./zod-schemas.js";
 import type { Uncapitalize } from "./typed-client.js";
 import type {
   OperationArgs,
@@ -154,13 +153,30 @@ function createModelProcedures<Schema extends SchemaDef>(
   schema: Schema,
   modelName: string,
   t: TRPCInstance,
-  procedure: TRPCInstance["procedure"]
+  procedure: TRPCInstance["procedure"],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  zodFactory: any
 ) {
-  const schemas = createModelSchemas(schema, modelName as keyof Schema["models"]);
   const modelNameLower = modelName.charAt(0).toLowerCase() + modelName.slice(1);
 
+  const opSchemaMap: Record<string, () => z.ZodType> = {
+    findMany: () => zodFactory.makeFindManySchema(modelName as any),
+    findUnique: () => zodFactory.makeFindUniqueSchema(modelName as any),
+    findFirst: () => zodFactory.makeFindFirstSchema(modelName as any),
+    create: () => zodFactory.makeCreateSchema(modelName as any),
+    createMany: () => zodFactory.makeCreateManySchema(modelName as any),
+    update: () => zodFactory.makeUpdateSchema(modelName as any),
+    updateMany: () => zodFactory.makeUpdateManySchema(modelName as any),
+    upsert: () => zodFactory.makeUpsertSchema(modelName as any),
+    delete: () => zodFactory.makeDeleteSchema(modelName as any),
+    deleteMany: () => zodFactory.makeDeleteManySchema(modelName as any),
+    count: () => zodFactory.makeCountSchema(modelName as any),
+    aggregate: () => zodFactory.makeAggregateSchema(modelName as any),
+    groupBy: () => zodFactory.makeGroupBySchema(modelName as any),
+  };
+
   const createHandler = (op: string, isQuery: boolean) => {
-    const inputSchema = (schemas as any)[op] as z.ZodType;
+    const inputSchema = (opSchemaMap[op]?.() ?? z.any()) as z.ZodType;
     const handler = async ({ ctx, input }: { ctx: any; input: any }) => {
       const db = ctx.db as any;
       const model = db[modelNameLower];
@@ -236,6 +252,7 @@ export function createZenStackRouter<
 ): ZenStackRouter<Schema, TContext> {
   const modelRouters: Record<string, ReturnType<typeof createModelProcedures>> = {};
   const procedure = options?.procedure ?? t.procedure;
+  const zodFactory = createQuerySchemaFactory(schema);
 
   // Get all model names from the schema
   const modelNames = Object.keys(schema.models);
@@ -246,7 +263,8 @@ export function createZenStackRouter<
       schema,
       modelName,
       t,
-      procedure
+      procedure,
+      zodFactory
     );
   }
 
