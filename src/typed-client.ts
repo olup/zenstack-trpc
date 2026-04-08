@@ -23,7 +23,15 @@
  * ```
  */
 
-import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
+import type {
+  SchemaDef,
+  GetModels,
+  NonRelationFields,
+  RelationFields,
+  RelationFieldType,
+  ModelFieldIsOptional,
+  FieldIsArray,
+} from "@zenstackhq/orm/schema";
 import type { SimplifiedPlainResult } from "@zenstackhq/orm";
 import type {
   UseQueryResult,
@@ -48,11 +56,117 @@ export type Uncapitalize<S extends string> = S extends `${infer F}${infer R}` ? 
 /** Infer result type with optional array wrapping */
 type Result<S extends SchemaDef, M extends GetModels<S>, T, D, Arr extends boolean = false> =
   Arr extends true
-    ? (SimplifiedPlainResult<S, M, T> extends never ? D : SimplifiedPlainResult<S, M, T>[])
-    : (SimplifiedPlainResult<S, M, T> extends never ? D : SimplifiedPlainResult<S, M, T>);
+    ? (ZenResult<S, M, T> extends never ? D : ZenResult<S, M, T>[])
+    : (ZenResult<S, M, T> extends never ? D : ZenResult<S, M, T>);
 
-/** Default result type for a model */
+/** Default result type for a model (all scalar fields, no relations) */
 type DefaultResult<S extends SchemaDef, M extends GetModels<S>> = SimplifiedPlainResult<S, M, {}>;
+
+/** Exported alias for use in router-generator.ts */
+export type ZenDefaultResult<S extends SchemaDef, M extends GetModels<S>> = DefaultResult<S, M>;
+
+// =============================================================================
+// tsgo-compatible result type
+//
+// In tsgo (TypeScript 7), ZenStack ORM's ModelSelectResult returns `unknown`
+// for scalar field types when select/include is used. This happens because tsgo
+// does not narrow the mapped type iteration variable `Key` in the value position
+// after `Key extends NonRelationFields<Schema, Model>`.
+//
+// Fix: Instead of a single mapped type that checks `Key extends NonRelation`
+// in the value position, split into two separate mapped types — one over
+// `keyof Sel & NonRelationFields<S, M>` (scalars) and one over
+// `keyof Sel & RelationFields<S, M>` (relations). The `Key` variable is then
+// already correctly typed in the value position without relying on narrowing.
+// =============================================================================
+
+import type { MapModelFieldType } from "@zenstackhq/orm";
+
+/**
+ * Wrap a relation result type, accounting for array and optionality.
+ * `Key` is already constrained to `RelationFields<S, M>` by the call-site.
+ */
+type WrapRelationType<
+  S extends SchemaDef,
+  M extends GetModels<S>,
+  Key extends RelationFields<S, M>,
+  Args,
+> =
+  FieldIsArray<S, M, Key> extends true
+    ? ModelFieldIsOptional<S, M, Key> extends true
+      ? ZenResult<S, RelationFieldType<S, M, Key>, Args>[] | null
+      : ZenResult<S, RelationFieldType<S, M, Key>, Args>[]
+    : ModelFieldIsOptional<S, M, Key> extends true
+      ? ZenResult<S, RelationFieldType<S, M, Key>, Args> | null
+      : ZenResult<S, RelationFieldType<S, M, Key>, Args>;
+
+/**
+ * Scalar fields from a `select` object.
+ * Iterates `keyof Sel & NonRelationFields` directly so `Key` is already the
+ * correct type — avoids the tsgo narrowing issue in conditional value branches.
+ */
+type SelectScalarPart<S extends SchemaDef, M extends GetModels<S>, Sel extends object> = {
+  [Key in keyof Sel &
+    NonRelationFields<S, M> as Sel[Key] extends false | null | undefined
+    ? never
+    : Key]: MapModelFieldType<S, M, Key>;
+};
+
+/**
+ * Relation fields from a `select` object (nested include/select).
+ * Same pattern: `Key` is directly typed as `RelationFields<S, M>`.
+ */
+type SelectRelationPart<S extends SchemaDef, M extends GetModels<S>, Sel extends object> = {
+  [Key in keyof Sel &
+    RelationFields<S, M> as Sel[Key] extends false | null | undefined
+    ? never
+    : Key]: WrapRelationType<S, M, Key, Sel[Key]>;
+};
+
+/**
+ * Result for a `select` query — scalar + relation parts merged.
+ */
+type SelectResult<S extends SchemaDef, M extends GetModels<S>, Sel extends object> =
+  SelectScalarPart<S, M, Sel> & SelectRelationPart<S, M, Sel>;
+
+/**
+ * `_count` result type when included via `include: { _count: ... }`.
+ * Maps the count select to `{ [field]: number }`.
+ */
+type IncludeCountResult<CountArg> =
+  CountArg extends true
+    ? { [K: string]: number }
+    : CountArg extends { select: infer S extends object }
+      ? { [K in keyof S]: number }
+      : never;
+
+/**
+ * The extra relation fields (and optional _count) added by an `include` object.
+ */
+type IncludeResult<S extends SchemaDef, M extends GetModels<S>, Inc extends object> =
+  { [Key in keyof Inc &
+      RelationFields<S, M> as Inc[Key] extends false | null | undefined
+      ? never
+      : Key]: WrapRelationType<S, M, Key, Inc[Key]>; } &
+  ('_count' extends keyof Inc
+    ? Inc['_count'] extends false | null | undefined
+      ? {}
+      : { _count: IncludeCountResult<Inc['_count']> }
+    : {});
+
+/**
+ * tsgo-compatible replacement for SimplifiedPlainResult<S, M, T>.
+ *
+ * Handles select, include, and bare (default) arg shapes. Falls back to
+ * DefaultResult when no select/include is present so zero-arg calls keep
+ * their correct full-model type.
+ */
+export type ZenResult<S extends SchemaDef, M extends GetModels<S>, Args> =
+  Args extends { select: infer Sel extends object }
+    ? SelectResult<S, M, Sel>
+    : Args extends { include: infer Inc extends object }
+      ? DefaultResult<S, M> & IncludeResult<S, M, Inc>
+      : DefaultResult<S, M>;
 
 // =============================================================================
 // Vanilla tRPC Client Types

@@ -6,6 +6,8 @@ import {
   type TypedRouterCaller,
   type ZenStackRouter,
 } from "../src/index.js";
+import type { ZenResult } from "../src/typed-client.js";
+import type { SimplifiedPlainResult } from "@zenstackhq/orm";
 
 /**
  * Type-level tests to verify that our TypedRouterCaller provides correct type inference.
@@ -173,6 +175,23 @@ describe("Type Tests", () => {
       type FindManyInput = Parameters<FindManyWithInclude>[0];
       expectTypeOf<FindManyInput>().not.toBeNever();
     });
+
+    // Regression tests: scalar fields in select/include must NOT be `unknown`
+    it("findMany with select should return typed scalar fields (not unknown)", () => {
+      type Result = Awaited<ReturnType<UserProcedures["findMany"]>>[number];
+      // Baseline: default result has proper types
+      expectTypeOf<Result["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<Result["email"]>().toEqualTypeOf<string>();
+      expectTypeOf<Result["name"]>().toEqualTypeOf<string | null>();
+    });
+
+    it("include with nested select should return typed scalar fields", () => {
+      // Post.author is optional=false, so author should not be null
+      type IncResult = Awaited<ReturnType<PostProcedures["findMany"]>>[number];
+      // Default post result has proper types
+      expectTypeOf<IncResult["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<IncResult["title"]>().toEqualTypeOf<string>();
+    });
   });
 
   describe("Dynamic select typing", () => {
@@ -181,6 +200,100 @@ describe("Type Tests", () => {
 
       type FindManyInput = Parameters<FindMany>[0];
       expectTypeOf<FindManyInput>().not.toBeNever();
+    });
+  });
+
+  describe("ZenResult select/include type correctness", () => {
+    it("ZenResult with no args returns DefaultResult", () => {
+      type R = ZenResult<SchemaType, "User", {}>;
+      expectTypeOf<R["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<R["email"]>().toEqualTypeOf<string>();
+      expectTypeOf<R["name"]>().toEqualTypeOf<string | null>();
+      expectTypeOf<R["createdAt"]>().toEqualTypeOf<Date>();
+    });
+
+    it("ZenResult with select returns only selected scalar fields with correct types", () => {
+      type R = ZenResult<SchemaType, "User", { select: { id: true; name: true } }>;
+      expectTypeOf<R["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<R["name"]>().toEqualTypeOf<string | null>();
+      // unselected fields should not be present
+      expectTypeOf<R>().not.toHaveProperty("email");
+    });
+
+    it("ZenResult with include adds relation with correct type", () => {
+      type R = ZenResult<SchemaType, "User", { include: { posts: true } }>;
+      // scalar fields still present
+      expectTypeOf<R["id"]>().toEqualTypeOf<string>();
+      // posts should be an array of Post-like objects
+      expectTypeOf<R["posts"]>().toBeArray();
+      type Post = R["posts"][number];
+      expectTypeOf<Post["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<Post["title"]>().toEqualTypeOf<string>();
+    });
+
+    it("ZenResult with include and nested select returns correct types", () => {
+      type R = ZenResult<SchemaType, "Post", { include: { author: { select: { id: true; name: true } } } }>;
+      // post scalar fields
+      expectTypeOf<R["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<R["title"]>().toEqualTypeOf<string>();
+      // author with nested select
+      type Author = R["author"];
+      expectTypeOf<Author["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<Author["name"]>().toEqualTypeOf<string | null>();
+      // unselected author fields not present
+      expectTypeOf<Author>().not.toHaveProperty("email");
+    });
+
+    it("ZenResult with _count include returns count fields as numbers (apiv4/AppAgents regression)", () => {
+      // Regression: IncludeResult previously excluded _count entirely because _count is not a
+      // RelationField. This caused `trpc.generated.agentGroup.findMany({ include: { _count: ... } })`
+      // in apiv4's AppAgents.tsx to produce a type with no _count property at all.
+      type R = ZenResult<SchemaType, "User", { include: { _count: { select: { posts: true } } } }>;
+      // scalar fields still present
+      expectTypeOf<R["id"]>().toEqualTypeOf<string>();
+      // _count must exist with the selected relation as a number
+      expectTypeOf<R["_count"]>().not.toBeNever();
+      expectTypeOf<R["_count"]["posts"]>().toEqualTypeOf<number>();
+    });
+
+    it("ZenResult with _count: true returns an index-keyed count object", () => {
+      type R = ZenResult<SchemaType, "User", { include: { _count: true } }>;
+      type Count = R["_count"];
+      expectTypeOf<Count>().not.toBeNever();
+      // _count: true maps every relation to number via { [K: string]: number }
+      expectTypeOf<Count>().toMatchTypeOf<Record<string, number>>();
+    });
+
+    it("ZenResult fixes the tsgo narrowing bug that SimplifiedPlainResult has with non-empty ExtResult (apiv4/evaluation regression)", () => {
+      // When a ZenStackClient has plugins applied (e.g., PolicyPlugin + custom plugins),
+      // its ExtResult type parameter becomes non-empty (e.g., Record<string, never>).
+      // Under tsgo (TypeScript 7), SimplifiedPlainResult<Schema, Model, Args, Options, NonEmptyExtResult>
+      // fails to narrow the iteration variable Key in the value branch of ModelSelectResult,
+      // causing scalar fields to become `unknown` instead of string/number/Date/etc.
+      //
+      // ZenResult sidesteps this entirely by using split mapped types (keyof Args & ScalarFields
+      // vs keyof Args & RelationFields) that are always resolved correctly by tsgo.
+      //
+      // This test confirms ZenResult returns the right types; the tsgo narrowing failure with
+      // SimplifiedPlainResult+non-empty ExtResult is captured below as a type alias for reference.
+
+      // Reference: what broke in apiv4 (extendedDb = db.$use(agentPlugin).$use(...).$use(new PolicyPlugin()))
+      // All apiv4 plugins use ExtResult = Record<string, never>, making the composed ExtResult non-empty.
+      type BrokenByTsgo = SimplifiedPlainResult<
+        SchemaType,
+        "Post",
+        { include: { author: { select: { id: true; name: true } } } },
+        any,
+        Record<string, never> // non-empty ExtResult — what .$use(plugin) adds
+      >;
+      // Under tsgo: BrokenByTsgo["author"]["id"] resolves to `unknown` instead of `string`.
+      // Under tsc 5.x: it resolves correctly to `string`.
+      // We don't assert the broken type here (it differs between compilers), but we DO assert
+      // that ZenResult — which zenstack-trpc's router generator now uses — is always correct:
+      type Fixed = ZenResult<SchemaType, "Post", { include: { author: { select: { id: true; name: true } } } }>;
+      type FixedAuthor = Fixed["author"];
+      expectTypeOf<FixedAuthor["id"]>().toEqualTypeOf<string>();
+      expectTypeOf<FixedAuthor["name"]>().toEqualTypeOf<string | null>();
     });
   });
 

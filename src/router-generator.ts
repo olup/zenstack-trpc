@@ -5,9 +5,9 @@ import type {
   TRPCMutationProcedure,
 } from "@trpc/server";
 import type { SchemaDef, GetModels } from "@zenstackhq/orm/schema";
-import { createQuerySchemaFactory, type SimplifiedPlainResult } from "@zenstackhq/orm";
+import { createQuerySchemaFactory } from "@zenstackhq/orm";
 import { z } from "zod";
-import type { Uncapitalize } from "./typed-client.js";
+import type { Uncapitalize, ZenResult, ZenDefaultResult } from "./typed-client.js";
 import type {
   OperationArgs,
   CountResultOps,
@@ -16,16 +16,6 @@ import type {
   MutationOps,
 } from "./operations.js";
 
-/**
- * Type for a single model's procedures - provides FULL dynamic input AND output typing
- *
- * When you pass `include` or `select`, the return type automatically includes those fields!
- */
-type DefaultResult<
-  Schema extends SchemaDef,
-  Model extends GetModels<Schema>
-> = SimplifiedPlainResult<Schema, Model, {}>;
-
 type CallerResultForOp<
   Schema extends SchemaDef,
   Model extends GetModels<Schema>,
@@ -33,9 +23,9 @@ type CallerResultForOp<
   Args
 > =
   Op extends "findMany"
-    ? SimplifiedPlainResult<Schema, Model, Args>[]
+    ? ZenResult<Schema, Model, Args>[]
     : Op extends "findUnique" | "findFirst"
-      ? SimplifiedPlainResult<Schema, Model, Args> | null
+      ? ZenResult<Schema, Model, Args> | null
       : Op extends CountResultOps
         ? { count: number }
         : Op extends NumberResultOps
@@ -44,7 +34,7 @@ type CallerResultForOp<
             ? any
             : Op extends "groupBy"
               ? any[]
-              : SimplifiedPlainResult<Schema, Model, Args>;
+              : ZenResult<Schema, Model, Args>;
 
 type ModelProcedure<
   Schema extends SchemaDef,
@@ -308,9 +298,9 @@ type TRPCOutputForOp<
   Op extends keyof OperationArgs<Schema, Model>
 > =
   Op extends "findMany"
-    ? DefaultResult<Schema, Model>[]
+    ? ZenDefaultResult<Schema, Model>[]
     : Op extends "findUnique" | "findFirst"
-      ? DefaultResult<Schema, Model> | null
+      ? ZenDefaultResult<Schema, Model> | null
       : Op extends CountResultOps
         ? { count: number }
         : Op extends NumberResultOps
@@ -319,7 +309,7 @@ type TRPCOutputForOp<
             ? any
             : Op extends "groupBy"
               ? any[]
-              : DefaultResult<Schema, Model>;
+              : ZenDefaultResult<Schema, Model>;
 
 /**
  * Type for a single model's tRPC procedures (for client inference)
