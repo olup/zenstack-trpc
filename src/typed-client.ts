@@ -32,7 +32,6 @@ import type {
   ModelFieldIsOptional,
   FieldIsArray,
 } from "@zenstackhq/orm/schema";
-import type { SimplifiedPlainResult } from "@zenstackhq/orm";
 import type {
   UseQueryResult,
   UseMutationResult,
@@ -59,11 +58,23 @@ type Result<S extends SchemaDef, M extends GetModels<S>, T, D, Arr extends boole
     ? (ZenResult<S, M, T> extends never ? D : ZenResult<S, M, T>[])
     : (ZenResult<S, M, T> extends never ? D : ZenResult<S, M, T>);
 
-/** Default result type for a model (all scalar fields, no relations) */
-type DefaultResult<S extends SchemaDef, M extends GetModels<S>> = SimplifiedPlainResult<S, M, {}>;
+/**
+ * Default result type for a model (all scalar fields, no relations).
+ *
+ * Intentionally does NOT use SimplifiedPlainResult / ModelResult. In @zenstackhq/orm 3.5.x,
+ * ModelResult gained an `ExtResult extends ExtResultBase<Schema>` constraint parameter that
+ * iterates all models and all their fields on every instantiation. When the schema is large
+ * (apiv4: 57 models, ~15 avg fields), this extra depth compounds through tRPC's
+ * inferRouterOutputs and exceeds TypeScript's instantiation limits, causing scalar fields to
+ * resolve as `unknown`. By mapping NonRelationFields directly we skip ModelResult entirely.
+ * See: https://github.com/zenstackhq/zenstack/issues/2569
+ */
+export type ZenDefaultResult<S extends SchemaDef, M extends GetModels<S>> = {
+  [Key in NonRelationFields<S, M>]: MapModelFieldType<S, M, Key>;
+};
 
-/** Exported alias for use in router-generator.ts */
-export type ZenDefaultResult<S extends SchemaDef, M extends GetModels<S>> = DefaultResult<S, M>;
+/** @internal kept for backward compat; prefer ZenDefaultResult */
+type DefaultResult<S extends SchemaDef, M extends GetModels<S>> = ZenDefaultResult<S, M>;
 
 // =============================================================================
 // tsgo-compatible result type
