@@ -364,6 +364,7 @@ describe("Client-side Type Tests", () => {
   describe("TypedTRPCClient (full include/select inference for clients)", () => {
     // TypedTRPCClient provides full dynamic typing when cast from a tRPC client
     type TypedClient = TypedTRPCClient<SchemaType>;
+    const typedClientInstance = null as unknown as TypedClient;
 
     it("has user namespace", () => {
       expectTypeOf<TypedClient>().toHaveProperty("user");
@@ -416,6 +417,35 @@ describe("Client-side Type Tests", () => {
     it("deleteMany returns count object", () => {
       expectTypeOf<TypedClient["user"]["deleteMany"]["mutate"]>().returns.toMatchTypeOf<Promise<{ count: number }>>();
     });
+
+    if (false) {
+      // Valid subset selects should compile.
+      typedClientInstance.user.findMany.query({
+        select: { id: true, email: true },
+      });
+
+      // Regression: extra keys mixed with valid keys must be rejected.
+      // @ts-expect-error "description" is not a User field
+      typedClientInstance.user.findMany.query({
+        select: {
+          id: true,
+          description: true,
+        },
+      });
+
+      // Regression: nested relation selects must reject extra keys too.
+      // @ts-expect-error "description" is not a Post field
+      typedClientInstance.user.findMany.query({
+        include: {
+          posts: {
+            select: {
+              id: true,
+              description: true,
+            },
+          },
+        },
+      });
+    }
   });
 
   // ==========================================================================
@@ -442,6 +472,7 @@ describe("Client-side Type Tests", () => {
 
   describe("Composable Type System - WithReact adapter", () => {
     type ReactTyped = WithReact<WithZenStack<SchemaType>>;
+    const typedReact = null as unknown as ReactTyped["__types"];
 
     it("WithReact transforms to React hook types", () => {
       expectTypeOf<ReactTyped>().toHaveProperty("__types");
@@ -473,6 +504,35 @@ describe("Client-side Type Tests", () => {
       expectTypeOf<ReactTyped["__types"]["user"]["update"]>().toHaveProperty("useMutation");
       expectTypeOf<ReactTyped["__types"]["user"]["delete"]>().toHaveProperty("useMutation");
     });
+
+    if (false) {
+      // Valid subset selects should compile.
+      typedReact.user.findMany.useQuery({
+        select: { id: true, email: true },
+      });
+
+      // Regression: extra select keys mixed with valid keys must be rejected.
+      // @ts-expect-error "description" is not a User field
+      typedReact.user.findMany.useQuery({
+        select: {
+          id: true,
+          description: true,
+        },
+      });
+
+      // Regression: nested relation selects must reject extra keys too.
+      // @ts-expect-error "description" is not a Post field
+      typedReact.user.findMany.useQuery({
+        include: {
+          posts: {
+            select: {
+              id: true,
+              description: true,
+            },
+          },
+        },
+      });
+    }
   });
 
   describe("Composable Type System - WithClient adapter", () => {

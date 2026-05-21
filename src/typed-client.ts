@@ -39,6 +39,7 @@ import type {
   UseQueryOptions,
 } from "@tanstack/react-query";
 import type { TRPCClientErrorLike } from "@trpc/client";
+import type { IncludeInput, OmitInput, SelectInput } from "@zenstackhq/orm";
 import type {
   OperationArgs,
   ArrayOps,
@@ -180,13 +181,65 @@ export type ZenResult<S extends SchemaDef, M extends GetModels<S>, Args> =
       : DefaultResult<S, M>;
 
 // =============================================================================
+// Exact query input typing
+//
+// `T extends Args` preserves dynamic output inference from a concrete select/include
+// object, but generic constraints alone do not reject extra nested keys. For example,
+// `{ select: { id: true, removedField: true } }` could pass because the object has
+// at least one valid key. These helpers keep subset-style inputs while rejecting
+// keys outside the schema-derived select/include/omit shapes.
+// =============================================================================
+
+type NoExtraKeys<T, Shape> =
+  T extends object
+    ? T & { [K in Exclude<keyof T, keyof Shape>]: never }
+    : T;
+
+type PreserveNullish<T, Strict> = Strict | Extract<T, null | undefined>;
+
+type StrictSelectInput<S extends SchemaDef, M extends GetModels<S>, T> =
+  NoExtraKeys<T, SelectInput<S, M>>;
+
+type StrictOmitInput<S extends SchemaDef, M extends GetModels<S>, T> =
+  NoExtraKeys<T, OmitInput<S, M>>;
+
+type StrictIncludeInput<S extends SchemaDef, M extends GetModels<S>, T> =
+  T extends object
+    ? NoExtraKeys<{
+        [K in keyof T]: K extends RelationFields<S, M>
+          ? T[K] extends boolean
+            ? T[K]
+            : StrictQueryInput<
+                S,
+                RelationFieldType<S, M, K>,
+                T[K],
+                OperationArgs<S, RelationFieldType<S, M, K>>["findMany"]
+              >
+          : T[K];
+      }, IncludeInput<S, M>>
+    : T;
+
+type StrictQueryInput<S extends SchemaDef, M extends GetModels<S>, T, Shape> =
+  T extends object
+    ? NoExtraKeys<{
+        [K in keyof T]: K extends "select"
+          ? PreserveNullish<T[K], StrictSelectInput<S, M, NonNullable<T[K]>>>
+          : K extends "include"
+            ? PreserveNullish<T[K], StrictIncludeInput<S, M, NonNullable<T[K]>>>
+            : K extends "omit"
+              ? PreserveNullish<T[K], StrictOmitInput<S, M, NonNullable<T[K]>>>
+              : T[K];
+      }, Shape>
+    : T;
+
+// =============================================================================
 // Vanilla tRPC Client Types
 // =============================================================================
 
 /** Query procedure - infers result from input */
 interface DynamicQuery<S extends SchemaDef, M extends GetModels<S>, Args, Default, Arr extends boolean> {
-  query<T extends Args>(input: T): Promise<Result<S, M, T, Default, Arr>>;
   query(input?: undefined): Promise<Default>;
+  query<T extends Args>(input: Args & StrictQueryInput<S, M, T, Args>): Promise<Result<S, M, T, Default, Arr>>;
 }
 
 /** Simple query - fixed result type */
@@ -246,8 +299,11 @@ type MutationOpts<TData, TError, TVariables, TContext = unknown> = Omit<UseMutat
 
 /** Query hook - infers result from input */
 interface DynamicQueryHook<S extends SchemaDef, M extends GetModels<S>, Args, Default, Arr extends boolean> {
-  useQuery<T extends Args>(input: T, opts?: QueryOpts<Result<S, M, T, Default, Arr>>): TRPCQueryResult<Result<S, M, T, Default, Arr>>;
   useQuery(input?: undefined, opts?: QueryOpts<Default>): TRPCQueryResult<Default>;
+  useQuery<T extends Args>(
+    input: Args & StrictQueryInput<S, M, T, Args>,
+    opts?: QueryOpts<Result<S, M, T, Default, Arr>>,
+  ): TRPCQueryResult<Result<S, M, T, Default, Arr>>;
 }
 
 /** Simple query hook - fixed result type */

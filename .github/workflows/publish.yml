@@ -17,7 +17,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -28,6 +28,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Type check tests
+        run: pnpm typecheck:tests
+
+      - name: Type check with TypeScript native preview
+        run: pnpm typecheck:tsgo
 
       - name: Run tests
         run: pnpm test

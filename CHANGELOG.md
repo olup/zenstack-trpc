@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-05-21
+
+### Fixed
+
+- Reject unknown keys in typed client `select`, `include`, and `omit` query inputs while preserving dynamic result inference.
+- Add CI checks for test type assertions and the TypeScript native preview compiler.
+
 ## [0.1.0] - 2024
 
 ### Added
