@@ -1,6 +1,6 @@
 {
   "name": "zenstack-trpc",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Auto-generate type-safe tRPC routers from ZenStack V3 schemas",
   "type": "module",
   "packageManager": "pnpm@10.33.4",

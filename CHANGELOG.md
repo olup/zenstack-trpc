@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2026-05-22
+
+### Fixed
+
+- Reject unknown keys in nested relation `select` inputs, including `select: { relation: { select: ... } }`.
+
 ## [0.2.4] - 2026-05-21
 
 ### Fixed

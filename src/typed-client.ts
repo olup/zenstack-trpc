@@ -198,7 +198,20 @@ type NoExtraKeys<T, Shape> =
 type PreserveNullish<T, Strict> = Strict | Extract<T, null | undefined>;
 
 type StrictSelectInput<S extends SchemaDef, M extends GetModels<S>, T> =
-  NoExtraKeys<T, SelectInput<S, M>>;
+  T extends object
+    ? NoExtraKeys<{
+        [K in keyof T]: K extends RelationFields<S, M>
+          ? T[K] extends boolean
+            ? T[K]
+            : StrictQueryInput<
+                S,
+                RelationFieldType<S, M, K>,
+                T[K],
+                OperationArgs<S, RelationFieldType<S, M, K>>["findMany"]
+              >
+          : T[K];
+      }, SelectInput<S, M>>
+    : T;
 
 type StrictOmitInput<S extends SchemaDef, M extends GetModels<S>, T> =
   NoExtraKeys<T, OmitInput<S, M>>;

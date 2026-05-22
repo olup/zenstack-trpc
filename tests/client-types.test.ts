@@ -445,6 +445,19 @@ describe("Client-side Type Tests", () => {
           },
         },
       });
+
+      // Regression: nested relation selects inside select must reject extra keys too.
+      // @ts-expect-error "description" is not a Post field
+      typedClientInstance.user.findMany.query({
+        select: {
+          posts: {
+            select: {
+              id: true,
+              description: true,
+            },
+          },
+        },
+      });
     }
   });
 
@@ -524,6 +537,19 @@ describe("Client-side Type Tests", () => {
       // @ts-expect-error "description" is not a Post field
       typedReact.user.findMany.useQuery({
         include: {
+          posts: {
+            select: {
+              id: true,
+              description: true,
+            },
+          },
+        },
+      });
+
+      // Regression: nested relation selects inside select must reject extra keys too.
+      // @ts-expect-error "description" is not a Post field
+      typedReact.user.findMany.useQuery({
+        select: {
           posts: {
             select: {
               id: true,
