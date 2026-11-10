@@ -146,6 +146,14 @@ const appRouter = createZenStackRouter(schema, t, {
 });
 ```
 
+Procedure input schemas are built lazily: a model/operation's Zod schema is created on that procedure's first call, not when the router is created. Pass the ORM client's `$zod` factory to share one schema cache between the router and the ORM's own input validation, so each schema is built once per process:
+
+```typescript
+const appRouter = createZenStackRouter(schema, t, {
+  zodFactory: db.$zod,
+});
+```
+
 ### `TypedRouterCaller<SchemaType>`
 
 Type helper for server-side caller with full type inference, including dynamic `include`/`select` result typing.

@@ -34,6 +34,7 @@ export {
   type ZenStackRouterRecord,
   type TypedRouterCaller,
   type CreateZenStackRouterOptions,
+  type ZenStackQuerySchemaFactory,
   type TRPCInstance,
 } from "./router-generator.js";
 

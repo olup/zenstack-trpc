@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Build each procedure's input schema lazily, on its first call, instead of building every model × operation schema when the router is created. On a 105-model schema the eager build held ~1.3GB of heap at startup, most of it for procedures never called.
+
+### Added
+
+- `zodFactory` option on `createZenStackRouter` to reuse an existing ZenStack schema factory (for example the ORM client's `$zod`), so the router and the ORM's input validation share one schema cache.
+
+### Removed
+
+- The `z.any()` fallback for an operation missing from the schema map. It was unreachable and would have silently accepted any input; a missing operation now throws on first call.
+
 ## [0.2.5] - 2026-05-22
 
 ### Fixed

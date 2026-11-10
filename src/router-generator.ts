@@ -140,8 +140,34 @@ export interface TRPCInstance {
 /** Extracts the context type from a tRPC instance */
 type InferTRPCContext<T> = T extends { _config: { $types: { ctx: infer Ctx } } } ? Ctx : any;
 
+/**
+ * The part of ZenStack's query schema factory the router uses. Structural on purpose, so a
+ * `createQuerySchemaFactory(schema)` result, a client's `$zod`, or a custom factory all fit.
+ */
+export type ZenStackQuerySchemaFactory = {
+  makeFindManySchema(model: any): z.ZodType;
+  makeFindUniqueSchema(model: any): z.ZodType;
+  makeFindFirstSchema(model: any): z.ZodType;
+  makeCreateSchema(model: any): z.ZodType;
+  makeCreateManySchema(model: any): z.ZodType;
+  makeUpdateSchema(model: any): z.ZodType;
+  makeUpdateManySchema(model: any): z.ZodType;
+  makeUpsertSchema(model: any): z.ZodType;
+  makeDeleteSchema(model: any): z.ZodType;
+  makeDeleteManySchema(model: any): z.ZodType;
+  makeCountSchema(model: any): z.ZodType;
+  makeAggregateSchema(model: any): z.ZodType;
+  makeGroupBySchema(model: any): z.ZodType;
+};
+
 export type CreateZenStackRouterOptions = {
   procedure?: TRPCInstance["procedure"];
+  /**
+   * Zod schema factory used to build procedure inputs. Defaults to a factory owned by the
+   * router. Pass the ORM client's `$zod` (or any factory you already hold) so the router and
+   * the ORM's own input validation share one schema cache instead of each building its own.
+   */
+  zodFactory?: ZenStackQuerySchemaFactory;
 };
 
 /**
@@ -152,12 +178,11 @@ function createModelProcedures<Schema extends SchemaDef>(
   modelName: string,
   t: TRPCInstance,
   procedure: TRPCInstance["procedure"],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  zodFactory: any
+  zodFactory: ZenStackQuerySchemaFactory
 ) {
   const modelNameLower = modelName.charAt(0).toLowerCase() + modelName.slice(1);
 
-  const opSchemaMap: Record<string, () => z.ZodType> = {
+  const opSchemaMap = {
     findMany: () => zodFactory.makeFindManySchema(modelName as any),
     findUnique: () => zodFactory.makeFindUniqueSchema(modelName as any),
     findFirst: () => zodFactory.makeFindFirstSchema(modelName as any),
@@ -171,10 +196,14 @@ function createModelProcedures<Schema extends SchemaDef>(
     count: () => zodFactory.makeCountSchema(modelName as any),
     aggregate: () => zodFactory.makeAggregateSchema(modelName as any),
     groupBy: () => zodFactory.makeGroupBySchema(modelName as any),
-  };
+  } satisfies Record<string, () => z.ZodType>;
 
-  const createHandler = (op: string, isQuery: boolean) => {
-    const inputSchema = (opSchemaMap[op]?.() ?? z.any()) as z.ZodType;
+  const createHandler = (op: keyof typeof opSchemaMap, isQuery: boolean) => {
+    // Built on the procedure's first call, not here: a ZenStack input schema is a deep Zod tree
+    // (every relation's where/select/include/orderBy, nested writes), and building all of them
+    // for every model x operation at router creation costs ~1.3GB of heap on a 105-model schema,
+    // while a typical app only ever calls a fraction of the generated procedures.
+    const inputSchema = z.lazy(() => opSchemaMap[op]());
     const handler = async ({ ctx, input }: { ctx: any; input: any }) => {
       const db = ctx.db as any;
       const model = db[modelNameLower];
@@ -250,7 +279,7 @@ export function createZenStackRouter<
 ): ZenStackRouter<Schema, InferTRPCContext<T>> {
   const modelRouters: Record<string, ReturnType<typeof createModelProcedures>> = {};
   const procedure = options?.procedure ?? t.procedure;
-  const zodFactory = createQuerySchemaFactory(schema);
+  const zodFactory: ZenStackQuerySchemaFactory = options?.zodFactory ?? createQuerySchemaFactory(schema);
 
   // Get all model names from the schema
   const modelNames = Object.keys(schema.models);
